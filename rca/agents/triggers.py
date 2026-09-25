@@ -42,8 +42,10 @@ async def on_leave_booked(db, leave: dict) -> AgentDocRow:
                 due_rows.append({"item": f"{f.text}", "owner": cover, "label": f.label})
             # Do-not-say: an unapproved pricing request must never be repeated as
             # approved in the covering RM's ear (failure point F3).
-            if f.kind == "decision" and re.search(r"pricing|تسعير", f.text, re.I) and re.search(
-                r"not|pending|awaiting|yet|لم تتم", f.text, re.I
+            if (
+                f.kind == "decision"
+                and re.search(r"pricing|تسعير", f.text, re.I)
+                and re.search(r"not|pending|awaiting|yet|لم تتم", f.text, re.I)
             ):
                 fid = next(iter(re.findall(r"G-\d+", f.text)), None)
                 if not fid:
@@ -51,7 +53,9 @@ async def on_leave_booked(db, leave: dict) -> AgentDocRow:
                         (x for x in facts if x.kind == "facility" and re.findall(r"G-\d+", x.text)),
                         None,
                     )
-                    fid = next(iter(re.findall(r"G-\d+", fac.text)), "the facility") if fac else "the facility"
+                    fid = (
+                        next(iter(re.findall(r"G-\d+", fac.text)), "the facility") if fac else "the facility"
+                    )
                 msg = f"Pricing for {fid} is approved (no approval recorded)"
                 if msg not in do_not_say:
                     do_not_say.append(msg)

@@ -137,7 +137,9 @@ async def overview(s=Depends(current_session), db: AsyncSession = Depends(get_db
         if d.kind == "cover_brief"
     ]
 
-    audit_tail = list((await db.execute(select(AuditEvent).order_by(AuditEvent.seq.desc()).limit(8))).scalars())
+    audit_tail = list(
+        (await db.execute(select(AuditEvent).order_by(AuditEvent.seq.desc()).limit(8))).scalars()
+    )
 
     return {
         "as_of": t.isoformat(),
