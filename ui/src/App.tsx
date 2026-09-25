@@ -166,6 +166,10 @@ export default function App() {
   }, [view, group, loadBoard, loadFile, loadHandover, handover]);
 
   const isDemo = new URLSearchParams(location.search).get("demo") === "1";
+  useEffect(() => {
+    document.body.classList.toggle("demo-mode", isDemo);
+    return () => document.body.classList.remove("demo-mode");
+  }, [isDemo]);
 
   // N5 + demo beats: navigate programmatically from the rail / nudges.
   const goTo = useCallback(
@@ -528,7 +532,34 @@ function FileView({
   }, [loadLink]);
 
   const conflicts = file.facts.filter((f) => f.label === "conflict");
-  const others = file.facts.filter((f) => f.label !== "conflict");
+  const dayMs = 86400000;
+  const daysUntil = (d?: string | null) =>
+    d ? Math.round((new Date(d + "T00:00:00").getTime() - new Date(file.as_of + "T00:00:00").getTime()) / dayMs) : null;
+
+  // Banking 360 triage numbers: exposure, next deadline, decisions, documents.
+  const facilities = file.facts.filter((f) => f.kind === "facility");
+  const exposure = facilities.reduce((sum, f) => sum + parseFloat(f.amount_kwd || "0"), 0);
+  const unowned = file.commitments.filter(
+    (c) => !c.owner && !["closed", "withdrawn"].includes(c.state)
+  );
+  const docsValid = file.facts.filter(
+    (f) => f.kind === "document" && f.due_date && f.due_date >= file.as_of
+  );
+  const attention = conflicts.length + unowned.length;
+
+  const facilityDeadlines = facilities.map((f) => f.due_date).filter(Boolean) as string[];
+  const commitmentDeadlines = file.commitments.map((c) => c.due_date).filter(Boolean) as string[];
+  const allDeadlines = [...facilityDeadlines, ...commitmentDeadlines].sort();
+  const deadline = allDeadlines.find((d) => d >= file.as_of) || allDeadlines[0] || null;
+  const deadlineDays = daysUntil(deadline);
+  const deadlineIsFacility = deadline !== null && facilityDeadlines.includes(deadline);
+  const deadlineFact = facilities.find((f) => f.due_date === deadline);
+
+  // Brief sections: triage order a corporate banker reads in.
+  const nonConflict = file.facts.filter((f) => f.label !== "conflict" && f.kind !== "contact");
+  const promiseFacts = nonConflict.filter((f) => f.kind === "commitment" || f.kind === "event");
+  const decisionFacts = nonConflict.filter((f) => f.kind === "decision");
+  const docFacts = nonConflict.filter((f) => f.kind === "document");
 
   const assignConflict = async (factId: string) => {
     const item = link.items.find((i) => i.kind === "conflict" && i.ref_id === factId);
@@ -601,6 +632,31 @@ function FileView({
         </div>
       </div>
 
+      <div className="glance">
+        <div className="gcard">
+          <span className="g-num">{exposure > 0 ? fmtKwd(String(exposure)) : "—"}</span>
+          <span className="g-label">{T("Facilities exposure", "إجمالي التسهيلات")}</span>
+        </div>
+        <div className={`gcard ${deadlineDays !== null && deadlineDays <= 30 ? "urgent" : ""}`}>
+          <span className="g-num">{deadline ? fmtDate(deadline) : "—"}</span>
+          <span className="g-label">
+            {T("Next deadline", "الموعد القادم")}
+            {deadlineDays !== null && ` · ${deadlineDays}d`}
+            {deadlineFact && deadlineDays !== null && deadlineDays <= 30 && (
+              <em> · {deadlineIsFacility ? T("facility expiry", "انتهاء تسهيل") : T("promise due", "استحقاق وعد")}</em>
+            )}
+          </span>
+        </div>
+        <div className={`gcard ${attention > 0 ? "urgent" : ""}`}>
+          <span className="g-num">{attention}</span>
+          <span className="g-label">{T("Items need a decision", "بنود تحتاج قراراً")}</span>
+        </div>
+        <div className="gcard">
+          <span className="g-num">{docsValid.length}</span>
+          <span className="g-label">{T("Valid documents on file", "مستندات سارية")}</span>
+        </div>
+      </div>
+
       <div className="assembled-note">
         <span className="pull">{T("Assembled for you", "أُعدّ لك تلقائياً")}</span>
         {T(
@@ -664,41 +720,152 @@ function FileView({
       </nav>
 
       {tab === "brief" && (
-        <ul className="facts">
-          {conflicts.map((f) => (
-            <ConflictCard
-              key={f.fact_id}
-              fact={f}
-              ar={ar}
-              canAssign={canAssign}
-              linked={{
-                handover_id: link.handover_id,
-                item_id: link.items.find((i) => i.kind === "conflict" && i.ref_id === f.fact_id)?.item_id || null,
-              }}
-              onAssign={() => assignConflict(f.fact_id)}
-              onOpenSource={onOpenSource}
-            />
-          ))}
-          {others.map((f) => (
-            <li key={f.fact_id}>
-              <div className="fact-row">
-                <p dir="auto">
-                  {f.text}
-                  {f.amount_kwd && <strong> · {fmtKwd(f.amount_kwd)}</strong>}
-                  {f.due_date && <span className="meta"> · {T("due", "يستحق")} {fmtDate(f.due_date)}</span>}
-                </p>
-                <div className="fact-side">
-                  <ConfidenceBand confidence={f.confidence} reasons={f.reasons} />
-                  <LabelChip label={f.label} reasons={f.reasons} ar={ar} />
-                  {f.evidence.map((e, i) => (
-                    <Citation key={i} ev={e} n={i + 1} onOpen={onOpenSource} />
-                  ))}
-                </div>
-              </div>
-              {f.reasons.length > 0 && <p className="meta reasons">{f.reasons.join(" · ")}</p>}
-            </li>
-          ))}
-        </ul>
+        <>
+          {conflicts.length > 0 && (
+            <div className="brief-section">
+              <h4>
+                {T("Needs a decision", "يحتاج قراراً")}
+                <span className="count urgent">{conflicts.length}</span>
+                <span className="meta sec-note">
+                  {T("two systems disagree — shown, never hidden", "نظامان يختلفان — نعرضه لا نخفيه")}
+                </span>
+              </h4>
+              <ul className="facts">
+                {conflicts.map((f) => (
+                  <ConflictCard
+                    key={f.fact_id}
+                    fact={f}
+                    ar={ar}
+                    canAssign={canAssign}
+                    linked={{
+                      handover_id: link.handover_id,
+                      item_id:
+                        link.items.find((i) => i.kind === "conflict" && i.ref_id === f.fact_id)?.item_id || null,
+                    }}
+                    onAssign={() => assignConflict(f.fact_id)}
+                    onOpenSource={onOpenSource}
+                  />
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div className="brief-section">
+            <h4>
+              {T("Facilities & exposure", "التسهيلات والتعرض")}
+              <span className="count">{facilities.length}</span>
+            </h4>
+            <ul className="facts">
+              {facilities.map((f) => {
+                const dd = daysUntil(f.due_date);
+                return (
+                  <li key={f.fact_id}>
+                    <div className="fact-row">
+                      <p dir="auto">
+                        {f.text}
+                        {f.amount_kwd && <strong> · {fmtKwd(f.amount_kwd)}</strong>}
+                        {f.due_date && <span className="meta"> · {T("expires", "ينتهي")} {fmtDate(f.due_date)}</span>}
+                      </p>
+                      <div className="fact-side">
+                        {dd !== null && dd <= 30 && (
+                          <span className={`due-chip ${dd <= 14 ? "now" : "soon"}`}>
+                            {dd < 0 ? T("expired", "منتهي") : T(`${dd}d to expiry`, `${dd} يوماً للانتهاء`)}
+                          </span>
+                        )}
+                        <ConfidenceBand confidence={f.confidence} reasons={f.reasons} />
+                        <LabelChip label={f.label} reasons={f.reasons} ar={ar} />
+                        {f.evidence.map((e, i) => (
+                          <Citation key={i} ev={e} n={i + 1} onOpen={onOpenSource} />
+                        ))}
+                      </div>
+                    </div>
+                    {f.reasons.length > 0 && <p className="meta reasons">{f.reasons.join(" · ")}</p>}
+                  </li>
+                );
+              })}
+              {facilities.length === 0 && <li className="meta">No facilities recorded.</li>}
+            </ul>
+          </div>
+
+          <div className="brief-section">
+            <h4>
+              {T("Promises & requests", "الوعود والطلبات")}
+              <span className="count">{promiseFacts.length}</span>
+            </h4>
+            <ul className="facts">
+              {promiseFacts.map((f) => (
+                <li key={f.fact_id}>
+                  <div className="fact-row">
+                    <p dir="auto">
+                      {f.text}
+                      {f.due_date && <span className="meta"> · {T("due", "يستحق")} {fmtDate(f.due_date)}</span>}
+                    </p>
+                    <div className="fact-side">
+                      <ConfidenceBand confidence={f.confidence} reasons={f.reasons} />
+                      <LabelChip label={f.label} reasons={f.reasons} ar={ar} />
+                      {f.evidence.map((e, i) => (
+                        <Citation key={i} ev={e} n={i + 1} onOpen={onOpenSource} />
+                      ))}
+                    </div>
+                  </div>
+                  {f.reasons.length > 0 && <p className="meta reasons">{f.reasons.join(" · ")}</p>}
+                </li>
+              ))}
+              {promiseFacts.length === 0 && <li className="meta">Nothing promised or requested.</li>}
+            </ul>
+          </div>
+
+          <div className="brief-section">
+            <h4>
+              {T("Context & decisions", "السياق والقرارات")}
+              <span className="count">{decisionFacts.length}</span>
+            </h4>
+            <ul className="facts">
+              {decisionFacts.map((f) => (
+                <li key={f.fact_id}>
+                  <div className="fact-row">
+                    <p dir="auto">{f.text}</p>
+                    <div className="fact-side">
+                      <ConfidenceBand confidence={f.confidence} reasons={f.reasons} />
+                      <LabelChip label={f.label} reasons={f.reasons} ar={ar} />
+                      {f.evidence.map((e, i) => (
+                        <Citation key={i} ev={e} n={i + 1} onOpen={onOpenSource} />
+                      ))}
+                    </div>
+                  </div>
+                  {f.reasons.length > 0 && <p className="meta reasons">{f.reasons.join(" · ")}</p>}
+                </li>
+              ))}
+              {decisionFacts.length === 0 && <li className="meta">No decisions recorded.</li>}
+            </ul>
+          </div>
+
+          <div className="brief-section">
+            <h4>
+              {T("Documents on file", "مستندات محفوظة")}
+              <span className="count">{docFacts.length}</span>
+            </h4>
+            <ul className="facts">
+              {docFacts.map((f) => (
+                <li key={f.fact_id}>
+                  <div className="fact-row">
+                    <p dir="auto">
+                      📄 {f.text}
+                    </p>
+                    <div className="fact-side">
+                      <ConfidenceBand confidence={f.confidence} reasons={f.reasons} />
+                      <LabelChip label={f.label} reasons={f.reasons} ar={ar} />
+                      {f.evidence.map((e, i) => (
+                        <Citation key={i} ev={e} n={i + 1} onOpen={onOpenSource} />
+                      ))}
+                    </div>
+                  </div>
+                </li>
+              ))}
+              {docFacts.length === 0 && <li className="meta">No documents recorded.</li>}
+            </ul>
+          </div>
+        </>
       )}
 
       {tab === "timeline" && (
@@ -732,21 +899,39 @@ function FileView({
             </tr>
           </thead>
           <tbody>
-            {file.commitments.map((c) => (
-              <tr key={c.commitment_id}>
+            {[...file.commitments]
+              .sort(
+                (a, b) =>
+                  (a.owner ? 1 : 0) - (b.owner ? 1 : 0) ||
+                  (a.due_date || "9999").localeCompare(b.due_date || "9999")
+              )
+              .map((c) => {
+                const dd = daysUntil(c.due_date);
+                const urgent =
+                  c.state === "requested" && dd !== null && (dd < 0 || !c.owner);
+                return (
+              <tr key={c.commitment_id} className={urgent ? "row-urgent" : ""}>
                 <td dir="auto">{c.description}</td>
                 <td>
                   <span className="chip">{c.state}</span>
                 </td>
                 <td>{c.owner || <span className="chip conflict">{ar ? "بلا مسؤول" : "Unowned"}</span>}</td>
-                <td>{fmtDate(c.due_date)}</td>
+                <td>
+                  {fmtDate(c.due_date)}
+                  {dd !== null && c.state === "requested" && (
+                    <span className={`due-chip ${dd < 0 ? "now" : dd <= 7 ? "soon" : "later"}`}>
+                      {dd < 0 ? T(`${-dd}d overdue`, `متأخر ${-dd} يوماً`) : T(`in ${dd}d`, `بعد ${dd} يوماً`)}
+                    </span>
+                  )}
+                </td>
                 <td>
                   {c.evidence.map((e, i) => (
                     <Citation key={i} ev={e} n={i + 1} onOpen={onOpenSource} />
                   ))}
                 </td>
               </tr>
-            ))}
+                );
+              })}
             {file.commitments.length === 0 && (
               <tr>
                 <td colSpan={5} className="meta">
@@ -778,41 +963,80 @@ function FileView({
                 </li>
               ))}
           </ul>
-          <div className="table-wrap" style={{ marginTop: 12 }}>
-          <table>
-            <thead>
-              <tr>
-                <th>{T("Legal entity", "الكيان القانوني")}</th>
-                <th>{T("Role", "الدور")}</th>
-                <th>CR</th>
-              </tr>
-            </thead>
-            <tbody>
-              {file.entities.map((e) => (
-                <tr key={e.entity_id}>
-                  <td>{e.legal_name_en}</td>
-                  <td className="meta">{e.role}</td>
-                  <td className="meta">{e.cr_number}</td>
-                </tr>
+          <h4 className="tree-title">{T("Group structure", "هيكل المجموعة")}</h4>
+          <div className="tree">
+            {file.entities
+              .filter((e) => e.role === "holding" || e.role === "single")
+              .map((h) => (
+                <div key={h.entity_id} className="tree-branch">
+                  <div className="tree-node root">
+                    <strong>{h.legal_name_en}</strong>
+                    <span className="meta">
+                      {h.role} · CR {h.cr_number}
+                    </span>
+                  </div>
+                  {file.entities
+                    .filter((c) => c.role === "subsidiary")
+                    .map((c) => (
+                      <div key={c.entity_id} className="tree-node child">
+                        <span className="tree-line" />
+                        <div>
+                          <strong>{c.legal_name_en}</strong>
+                          <span className="meta">
+                            {T("subsidiary", "فرع")} · CR {c.cr_number}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                </div>
               ))}
-            </tbody>
-          </table>
           </div>
         </>
       )}
 
-      {tab === "sources" && (
-        <ul className="sources">
-          {[...new Set(file.facts.flatMap((f) => f.evidence))].map((e, i) => (
-            <li key={i} onClick={() => onOpenSource(e)} className="source-row">
-              <span className="chip">{e.source_system}</span> {e.record_id}{" "}
-              <span className="meta">
-                v{e.record_version} · {e.as_of} · {e.lang.toUpperCase()}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
+      {tab === "sources" &&
+        (() => {
+          const all = [...new Set(file.facts.flatMap((f) => f.evidence))];
+          const bySystem = new Map<string, typeof all>();
+          for (const e of all) {
+            const list = bySystem.get(e.source_system) || [];
+            list.push(e);
+            bySystem.set(e.source_system, list);
+          }
+          return (
+            <>
+              <p className="meta" style={{ margin: "4px 0 12px" }}>
+                {T(
+                  "Grouped by source system. Records older than 60 days are flagged — verify freshness before quoting.",
+                  "مجمّعة حسب النظام. السجلات الأقدم من 60 يوماً معلّمة — تحقق من حداثتها قبل الاقتباس."
+                )}
+              </p>
+              {[...bySystem.entries()].map(([sys, evs]) => (
+                <div key={sys} className="src-group">
+                  <h4 className="tree-title">
+                    <span className="chip">{sys}</span>
+                    <span className="count">{evs.length}</span>
+                  </h4>
+                  <ul className="sources">
+                    {evs.map((e, i) => {
+                      const age = daysUntil(e.as_of);
+                      const stale = age !== null && -age > 60;
+                      return (
+                        <li key={i} onClick={() => onOpenSource(e)} className="source-row">
+                          {e.record_id}{" "}
+                          <span className="meta">
+                            v{e.record_version} · {e.as_of} · {e.lang.toUpperCase()}
+                          </span>
+                          {stale && <span className="due-chip soon">{T("stale", "قديم")} · {-age}d</span>}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ))}
+            </>
+          );
+        })()}
     </section>
   );
 }

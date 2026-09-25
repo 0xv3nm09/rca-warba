@@ -605,3 +605,54 @@ main { max-width: 1200px; margin: 0 auto; }
   max-width: 560px;
 }
 .role-note strong { color: var(--ink); }
+
+/* ================= Client file: banking 360 redesign ================= */
+.glance { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin: 10px 0 14px; }
+.gcard {
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 14px 18px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 2px;
+}
+.gcard .g-num { font-size: 21px; font-weight: 700; color: var(--navy-900); letter-spacing: -0.02em; }
+.gcard .g-label { font-size: 11.5px; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.6px; font-weight: 600; }
+.gcard .g-label em { font-style: normal; text-transform: none; letter-spacing: 0; font-weight: 550; color: var(--warn-800); }
+.gcard.urgent { border-inline-start: 4px solid var(--bad-700); }
+.gcard.urgent .g-num { color: var(--bad-700); }
+
+.brief-section { margin-bottom: 22px; }
+.brief-section h4, .tree-title {
+  display: flex; align-items: center; gap: 8px; margin: 0 0 10px;
+  font-size: 12px; font-weight: 650; text-transform: uppercase; letter-spacing: 0.8px;
+  color: var(--ink-3); border-bottom: 1px solid var(--line); padding-bottom: 6px;
+}
+.brief-section .count, .tree-title .count {
+  background: var(--navy-100); color: var(--navy-800); border-radius: 999px;
+  font-size: 11px; padding: 1px 8px; font-weight: 700;
+}
+.brief-section .count.urgent { background: var(--bad-100); color: var(--bad-700); }
+.brief-section .sec-note { text-transform: none; letter-spacing: 0; font-weight: 500; }
+
+.due-chip {
+  display: inline-flex; align-items: center; border-radius: 999px; padding: 2px 9px;
+  font-size: 11.5px; font-weight: 650; white-space: nowrap;
+}
+.due-chip.now { background: var(--bad-100); color: var(--bad-700); border: 1px solid #f0c4cc; }
+.due-chip.soon { background: var(--warn-100); color: var(--warn-800); border: 1px solid #f0dcb4; }
+.due-chip.later { background: var(--grey-bg, #f3f4f6); color: var(--ink-2); border: 1px solid var(--line-2); }
+tr.row-urgent td { background: #fff8f8; }
+
+.tree { display: flex; flex-direction: column; gap: 12px; }
+.tree-branch { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow); }
+.tree-node { display: flex; flex-direction: column; gap: 1px; padding: 8px 12px; border-radius: 8px; }
+.tree-node.root { background: var(--navy-900); color: #fff; }
+.tree-node.root .meta { color: #b9c6dc; }
+.tree-node.child { display: flex; gap: 10px; align-items: center; margin-top: 6px; border: 1px dashed var(--line-2); }
+.tree-node.child .tree-line { width: 18px; height: 2px; background: var(--line-2); flex-shrink: 0; }
+.tree-node strong { font-size: 14px; }
+
+.src-group { margin-bottom: 18px; }
+.source-row .due-chip { margin-inline-start: auto; }
+
+/* reserve the guided-demo rail column so it never covers content */
+body.demo-mode main { padding-inline-end: 300px; }
+@media (max-width: 1100px) { body.demo-mode main { padding-inline-end: 28px; } }
+.tree-node.child > div:last-child { display: flex; flex-direction: column; gap: 1px; }
