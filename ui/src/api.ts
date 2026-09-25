@@ -87,6 +87,8 @@ export interface HandoverDetail {
   from_rm: string;
   to_rm: string;
   status: string;
+  ready: boolean;
+  blocking: { reason: string; item_id: string | null }[];
   items: HandoverItem[];
 }
 
@@ -191,5 +193,21 @@ export const api = {
       alerts: { alert_id: string; kind: string; group_id: string | null; text: string; to_role: string }[];
       audit_tail: { seq: number; ts: string; actor: string; action: string; subject: string }[];
     }>("GET", "/agents/overview"),
+  handoverLink: (groupId: string) =>
+    call<{ handover_id: string | null; items: { item_id: string; kind: string; ref_id: string | null; status: string }[] }>(
+      "GET",
+      `/groups/${groupId}/handover-link`
+    ),
+  evals: () =>
+    call<{
+      generated_at?: string;
+      routes?: Record<string, string>;
+      gates: { checks_passed: number; checks_total: number; numeric_exactness: number; all_gates_green: boolean };
+      cases: {
+        case_id: string;
+        passed: boolean;
+        checks: { name: string; ok: boolean; detail?: string }[];
+      }[];
+    }>("GET", "/admin/evals"),
   auditVerify: () => call<{ chain_valid: boolean }>("GET", "/admin/audit/verify"),
 };

@@ -48,12 +48,51 @@ async def detail(
     handover_id: str, request: Request, s=Depends(current_session), db: AsyncSession = Depends(get_db)
 ):
     from rca.app.errors import NotFound
-    from rca.db.models import HandoverRow
+    from rca.db.models import CommitmentRow, FactRow, HandoverRow
+    from sqlalchemy import select
 
     h = await db.get(HandoverRow, handover_id)
     if h is None:
         raise NotFound("Handover not found")
     items = await svc.items(db, handover_id)
+    r = await svc.readiness(db, handover_id)
+
+    # Map each blocking reason to the item that resolves it, so the console can
+    # link the reason to its fix (walkthrough screen: close blocked -> item).
+    comms = {
+        c.id: c
+        for c in (
+            await db.execute(select(CommitmentRow).where(CommitmentRow.group_id == h.group_id))
+        ).scalars()
+    }
+    facts = {
+        f.id: f for f in (await db.execute(select(FactRow).where(FactRow.group_id == h.group_id))).scalars()
+    }
+    blocking = []
+    for reason in r.blocking:
+        linked = None
+        for it in items:
+            if it.kind == "conflict" and "conflict" in reason.lower():
+                linked = it.id
+                break
+            if (
+                it.kind == "commitment"
+                and it.ref_id in comms
+                and comms[it.ref_id].description[:40].lower() in reason.lower()
+            ):
+                linked = it.id
+                break
+        if linked is None:
+            for it in items:
+                if (
+                    it.kind == "conflict"
+                    and it.ref_id in facts
+                    and facts[it.ref_id].text[:40].lower() in reason.lower()
+                ):
+                    linked = it.id
+                    break
+        blocking.append({"reason": reason, "item_id": linked})
+
     return HandoverDetail(
         request_id=request.state.request_id,
         handover_id=h.id,
@@ -61,6 +100,8 @@ async def detail(
         from_rm=h.from_rm,
         to_rm=h.to_rm,
         status=h.status,
+        ready=r.ready,
+        blocking=blocking,
         items=[
             ItemOut(
                 item_id=i.id,

@@ -11,6 +11,7 @@ RUN uv sync --frozen --no-install-project --no-dev \
 COPY rca ./rca
 COPY config ./config
 COPY ui/dist ./ui/dist
+COPY reports/golden_snapshot.json ./reports/golden_snapshot.json
 RUN uv sync --no-dev
 
 EXPOSE 8000

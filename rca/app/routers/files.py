@@ -89,3 +89,30 @@ async def file(group_id: str, request: Request, s=Depends(group_scope), db: Asyn
         open_conflicts=sum(1 for f in facts if f.label == "conflict"),
         stale_sources=[],
     )
+
+
+@router.get("/{group_id}/handover-link")
+async def handover_link(group_id: str, s=Depends(group_scope), db: AsyncSession = Depends(get_db)):
+    """The open transfer for this group and its item links, so the console can
+    wire a conflict fact to its exception item (assign-to-owner from the file)."""
+    from rca.db.models import HandoverItemRow, HandoverRow
+
+    h = (
+        (
+            await db.execute(
+                select(HandoverRow)
+                .where(HandoverRow.group_id == group_id, HandoverRow.status == "open")
+                .order_by(HandoverRow.created_at.desc())
+                .limit(1)
+            )
+        )
+        .scalars()
+        .first()
+    )
+    if h is None:
+        return {"handover_id": None, "items": []}
+    items = (await db.execute(select(HandoverItemRow).where(HandoverItemRow.handover_id == h.id))).scalars()
+    return {
+        "handover_id": h.id,
+        "items": [{"item_id": i.id, "kind": i.kind, "ref_id": i.ref_id, "status": i.status} for i in items],
+    }

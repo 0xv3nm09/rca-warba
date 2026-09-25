@@ -11,9 +11,9 @@ import {
   type Evidence,
   type HandoverDetail,
 } from "./api";
-import { Citation, ConfidenceBand, fmtDate, fmtKwd, LabelChip, SourceDrawer } from "./components";
+import { Citation, ConflictCard, ConfidenceBand, fmtDate, fmtKwd, LabelChip, SourceDrawer } from "./components";
 
-type View = "board" | "file" | "handover" | "agents";
+type View = "board" | "file" | "handover" | "agents" | "evals";
 
 const DEMO_USERS = [
   { id: "sara.rm", label: "Sara — incoming RM", role: "RM · GHC-001", group: "GHC-001" },
@@ -88,6 +88,9 @@ export default function App() {
           <button className={view === "agents" ? "on" : ""} onClick={() => setView("agents")}>
             Agents
           </button>
+          <button className={view === "evals" ? "on" : ""} onClick={() => setView("evals")}>
+            Evals
+          </button>
         </nav>
         <div className="who">
           <span className="avatar">{initials}</span>
@@ -143,12 +146,15 @@ export default function App() {
             }}
             onOpenSource={setDrawer}
             onGroup={setGroup}
+            onError={setError}
+            reloadFile={() => loadFile(group)}
           />
         )}
         {view === "handover" && (
           <HandoverView handover={handover} onReload={() => handover && loadHandover(handover.handover_id)} onError={setError} />
         )}
         {view === "agents" && <AgentsView />}
+        {view === "evals" && <EvalsView />}
       </main>
 
       <SourceDrawer ev={drawer} onClose={() => setDrawer(null)} />
@@ -290,6 +296,8 @@ function FileView({
   onAsk,
   onOpenSource,
   onGroup,
+  onError,
+  reloadFile,
 }: {
   file: ClientFile;
   ask: AskResult | null;
@@ -299,44 +307,111 @@ function FileView({
   onAsk: () => void;
   onOpenSource: (e: Evidence) => void;
   onGroup: (g: string) => void;
+  onError: (s: string) => void;
+  reloadFile: () => void;
 }) {
-  const [tab, setTab] = useState<"brief" | "commitments" | "people" | "sources">("brief");
+  const [tab, setTab] = useState<"brief" | "timeline" | "commitments" | "people" | "sources">("brief");
+  const [ar, setAr] = useState(false);
+  const [link, setLink] = useState<{ handover_id: string | null; items: { item_id: string; kind: string; ref_id: string | null; status: string }[] }>({ handover_id: null, items: [] });
   const groups = ["GHC-001", "ALS-014", "NLG-022"];
+  const canAssign = currentUser === "lead.one";
+
+  const loadLink = useCallback(() => {
+    api.handoverLink(file.group_id).then(setLink).catch(() => {});
+  }, [file.group_id]);
+  useEffect(() => {
+    loadLink();
+  }, [loadLink]);
+
+  const conflicts = file.facts.filter((f) => f.label === "conflict");
+  const others = file.facts.filter((f) => f.label !== "conflict");
+
+  const assignConflict = async (factId: string) => {
+    const item = link.items.find((i) => i.kind === "conflict" && i.ref_id === factId);
+    if (!item || !link.handover_id) return;
+    try {
+      await api.assign(link.handover_id, item.item_id, "sara.rm", "2026-09-26");
+      loadLink();
+      reloadFile();
+    } catch (e: any) {
+      onError(e?.error?.message || "assign failed");
+    }
+  };
+
+  // Timeline: dated events derived from facts and commitments (walkthrough tab 2).
+  const timeline = [
+    ...file.facts.map((f) => ({
+      date: (f.evidence.length ? f.evidence.map((e) => e.as_of).sort().slice(-1)[0] : f.due_date) || "",
+      text: f.text,
+      kind: f.kind,
+      label: f.label,
+      ar,
+    })),
+    ...file.commitments.map((c) => ({
+      date: c.due_date || "",
+      text: c.description,
+      kind: "commitment",
+      label: c.owner ? "verified" : "conflict",
+      ar,
+    })),
+  ]
+    .filter((e) => e.date)
+    .sort((a, b) => (a.date < b.date ? 1 : -1))
+    .slice(0, 24);
+
+  const T = (en: string, arb: string) => (ar ? arb : en);
+  const TABS = [
+    { id: "brief", label: T("Relationship brief", "الملف") },
+    { id: "timeline", label: T("Timeline", "السجل الزمني") },
+    { id: "commitments", label: T("Commitments", "الالتزامات") },
+    { id: "people", label: T("People", "الأشخاص") },
+    { id: "sources", label: T("Sources", "المصادر") },
+  ] as const;
+
   return (
-    <section>
+    <section dir={ar ? "rtl" : "ltr"}>
       <div className="row" style={{ justifyContent: "space-between" }}>
         <div>
           <h2>{file.group_name || file.group_id}</h2>
           <p className="meta">
-            {file.group_id} · as of {fmtDate(file.as_of)} · {file.open_conflicts} open conflict
-            {file.open_conflicts === 1 ? "" : "s"}
+            {file.group_id} · {T("as of", "ب تاريخ")} {fmtDate(file.as_of)} ·{" "}
+            {file.open_conflicts} {T("open conflict(s)", "تعارض مفتوح")}
           </p>
         </div>
-        <select value={file.group_id} onChange={(e) => onGroup(e.target.value)} aria-label="Client group">
-          {groups.map((g) => (
-            <option key={g}>{g}</option>
-          ))}
-        </select>
+        <div className="row">
+          <div className="lang-toggle">
+            <button className={!ar ? "on" : ""} onClick={() => setAr(false)}>EN</button>
+            <button className={ar ? "on" : ""} onClick={() => setAr(true)}>AR</button>
+          </div>
+          <select value={file.group_id} onChange={(e) => onGroup(e.target.value)} aria-label="Client group">
+            {groups.map((g) => (
+              <option key={g}>{g}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <div className="ask-panel">
         <input
-          placeholder="Ask the file… e.g. Can I tell the client the new price is approved?"
+          placeholder={T(
+            "Ask the file… e.g. Can I tell the client the new price is approved?",
+            "اسأل الملف… مثال: هل يمكنني إبلاغ العميل بأن السعر الجديد معتمد؟"
+          )}
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && onAsk()}
         />
         <button disabled={busy || question.length < 3} onClick={onAsk}>
-          {busy ? "Asking…" : "Ask"}
+          {busy ? "…" : T("Ask", "اسأل")}
         </button>
       </div>
       {ask && (
         <div className={`answer ${ask.label}`}>
           <div className="row">
-            <LabelChip label={ask.label} reasons={ask.reasons} />
+            <LabelChip label={ask.label} reasons={ask.reasons} ar={ar} />
             <ConfidenceBand confidence={ask.confidence} />
           </div>
-          <p>{ask.answer}</p>
+          <p dir="auto">{ask.answer}</p>
           <p className="meta">
             {ask.reasons.join(" · ")}
             {ask.citations.map((c, i) => (
@@ -347,26 +422,40 @@ function FileView({
       )}
 
       <nav className="tabs">
-        {(["brief", "commitments", "people", "sources"] as const).map((t) => (
-          <button key={t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>
-            {t === "brief" ? "Relationship brief" : t[0].toUpperCase() + t.slice(1)}
+        {TABS.map((t) => (
+          <button key={t.id} className={tab === t.id ? "on" : ""} onClick={() => setTab(t.id)}>
+            {t.label}
           </button>
         ))}
       </nav>
 
       {tab === "brief" && (
         <ul className="facts">
-          {file.facts.map((f) => (
+          {conflicts.map((f) => (
+            <ConflictCard
+              key={f.fact_id}
+              fact={f}
+              ar={ar}
+              canAssign={canAssign}
+              linked={{
+                handover_id: link.handover_id,
+                item_id: link.items.find((i) => i.kind === "conflict" && i.ref_id === f.fact_id)?.item_id || null,
+              }}
+              onAssign={() => assignConflict(f.fact_id)}
+              onOpenSource={onOpenSource}
+            />
+          ))}
+          {others.map((f) => (
             <li key={f.fact_id}>
               <div className="fact-row">
                 <p dir="auto">
                   {f.text}
                   {f.amount_kwd && <strong> · {fmtKwd(f.amount_kwd)}</strong>}
-                  {f.due_date && <span className="meta"> · due {fmtDate(f.due_date)}</span>}
+                  {f.due_date && <span className="meta"> · {T("due", "يستحق")} {fmtDate(f.due_date)}</span>}
                 </p>
                 <div className="fact-side">
                   <ConfidenceBand confidence={f.confidence} />
-                  <LabelChip label={f.label} reasons={f.reasons} />
+                  <LabelChip label={f.label} reasons={f.reasons} ar={ar} />
                   {f.evidence.map((e, i) => (
                     <Citation key={i} ev={e} n={i + 1} onOpen={onOpenSource} />
                   ))}
@@ -378,25 +467,43 @@ function FileView({
         </ul>
       )}
 
+      {tab === "timeline" && (
+        <ul className="timeline">
+          {timeline.map((e, i) => (
+            <li key={i}>
+              <span className="tl-date">{fmtDate(e.date)}</span>
+              <span className="tl-dot" />
+              <div className="tl-body">
+                <p dir="auto">{e.text}</p>
+                <span className="meta">
+                  {e.kind} · <LabelChip label={e.label} ar={ar} />
+                </span>
+              </div>
+            </li>
+          ))}
+          {timeline.length === 0 && <li className="meta">No dated events.</li>}
+        </ul>
+      )}
+
       {tab === "commitments" && (
         <table>
           <thead>
             <tr>
-              <th>Commitment</th>
-              <th>State</th>
-              <th>Owner</th>
-              <th>Due</th>
-              <th>Source</th>
+              <th>{T("Commitment", "الالتزام")}</th>
+              <th>{T("State", "الحالة")}</th>
+              <th>{T("Owner", "المسؤول")}</th>
+              <th>{T("Due", "الاستحقاق")}</th>
+              <th>{T("Source", "المصدر")}</th>
             </tr>
           </thead>
           <tbody>
             {file.commitments.map((c) => (
               <tr key={c.commitment_id}>
-                <td>{c.description}</td>
+                <td dir="auto">{c.description}</td>
                 <td>
                   <span className="chip">{c.state}</span>
                 </td>
-                <td>{c.owner || <span className="chip conflict">Unowned</span>}</td>
+                <td>{c.owner || <span className="chip conflict">{ar ? "بلا مسؤول" : "Unowned"}</span>}</td>
                 <td>{fmtDate(c.due_date)}</td>
                 <td>
                   {c.evidence.map((e, i) => (
@@ -408,7 +515,7 @@ function FileView({
             {file.commitments.length === 0 && (
               <tr>
                 <td colSpan={5} className="meta">
-                  No open commitments recorded.
+                  {T("No open commitments recorded.", "لا توجد التزامات مفتوحة.")}
                 </td>
               </tr>
             )}
@@ -426,7 +533,7 @@ function FileView({
                   <div className="fact-row">
                     <p dir="auto">{f.text}</p>
                     <div className="fact-side">
-                      <LabelChip label={f.label} reasons={f.reasons} />
+                      <LabelChip label={f.label} reasons={f.reasons} ar={ar} />
                       {f.evidence.map((e, i) => (
                         <Citation key={i} ev={e} n={i + 1} onOpen={onOpenSource} />
                       ))}
@@ -438,9 +545,9 @@ function FileView({
           <table style={{ marginTop: 12 }}>
             <thead>
               <tr>
-                <th>Legal entity</th>
-                <th>Role</th>
-                <th>CR number</th>
+                <th>{T("Legal entity", "الكيان القانوني")}</th>
+                <th>{T("Role", "الدور")}</th>
+                <th>CR</th>
               </tr>
             </thead>
             <tbody>
@@ -471,7 +578,6 @@ function FileView({
     </section>
   );
 }
-
 function HandoverView({
   handover,
   onReload,
@@ -491,13 +597,19 @@ function HandoverView({
   const conflicts = handover.items.filter((i) => i.kind === "conflict");
   const accepted = handover.items.filter((i) => i.status === "accepted").length;
   const returned = handover.items.filter((i) => i.status === "returned").length;
+  const open = handover.items.filter((i) => i.status === "open");
+  // Walkthrough: the interview shows one question at a time.
+  const current = questions.find((q) => !q.answer_text);
+  const qIndex = current ? questions.indexOf(current) + 1 : questions.length;
+  const blockers = handover.status === "closed" ? [] : handover.blocking;
 
   return (
     <section>
       <div className="row" style={{ justifyContent: "space-between" }}>
         <div>
           <h2>
-            Transfer {handover.group_id} <span className={`pill ${handover.status}`}>{handover.status}</span>
+            Transfer {handover.group_id}{" "}
+            <span className={`pill ${handover.status}`}>{handover.status}</span>
           </h2>
           <p className="meta">
             {handover.from_rm} → {handover.to_rm}
@@ -509,38 +621,74 @@ function HandoverView({
       </div>
 
       <h3>
-        <span className="step">1</span> Gap questions for the outgoing RM
+        <span className="step">1</span> Gap questions for the outgoing RM{" "}
+        <span className="meta">
+          {qIndex} / {questions.length}
+        </span>
       </h3>
-      {questions.map((q) => (
-        <div key={q.item_id} className="q-card">
-          <p className="q-text">{q.question_text}</p>
-          <p className="meta">Why asked: {q.why_asked} · failure point {q.failure_point}</p>
-          {q.answer_text ? (
-            <p className="recollection">Saved as recollection — “{q.answer_text}”</p>
-          ) : (
-            <div className="ask-panel">
-              <input
-                placeholder="Your answer (saved as recollection, never as verified fact)…"
-                value={answers[q.item_id] || ""}
-                onChange={(e) => setAnswers({ ...answers, [q.item_id]: e.target.value })}
-              />
-              <button
-                disabled={(answers[q.item_id] || "").length < 2}
-                onClick={async () => {
-                  try {
-                    await api.answerQuestion(handover.handover_id, q.item_id, answers[q.item_id]);
-                    onReload();
-                  } catch (e: any) {
-                    onError(e?.error?.message || "save failed");
-                  }
-                }}
-              >
-                Save answer
-              </button>
-            </div>
-          )}
-        </div>
-      ))}
+      {questions
+        .filter((q) => q.answer_text || q === current)
+        .map((q) => (
+          <div key={q.item_id} className="q-card">
+            <p className="q-text">{q.question_text}</p>
+            <p className="meta">Why asked: {q.why_asked} · failure point {q.failure_point}</p>
+            {q.answer_text ? (
+              <p className="recollection">Saved as recollection — “{q.answer_text}”</p>
+            ) : (
+              <div className="ask-panel">
+                <input
+                  placeholder="Your answer (saved as recollection, never as verified fact)…"
+                  value={answers[q.item_id] || ""}
+                  onChange={(e) => setAnswers({ ...answers, [q.item_id]: e.target.value })}
+                  onKeyDown={async (e) => {
+                    if (e.key === "Enter" && (answers[q.item_id] || "").length >= 2) {
+                      try {
+                        await api.answerQuestion(handover.handover_id, q.item_id, answers[q.item_id]);
+                        onReload();
+                      } catch (err: any) {
+                        onError(err?.error?.message || "save failed");
+                      }
+                    }
+                  }}
+                />
+                <button
+                  disabled={(answers[q.item_id] || "").length < 2}
+                  onClick={async () => {
+                    try {
+                      await api.answerQuestion(handover.handover_id, q.item_id, answers[q.item_id]);
+                      onReload();
+                    } catch (err: any) {
+                      onError(err?.error?.message || "save failed");
+                    }
+                  }}
+                >
+                  Save answer
+                </button>
+                <button
+                  className="ghost"
+                  onClick={async () => {
+                    try {
+                      await api.answerQuestion(
+                        handover.handover_id,
+                        q.item_id,
+                        "I don't know",
+                        "Outgoing RM could not recall; item stays unknown, never filled in"
+                      );
+                      onReload();
+                    } catch (err: any) {
+                      onError(err?.error?.message || "save failed");
+                    }
+                  }}
+                >
+                  I don't know
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
+      {questions.length > 0 && !current && (
+        <p className="ok-text">✓ All gap questions answered ({questions.length}).</p>
+      )}
 
       <h3>
         <span className="step">2</span> Acceptance by the incoming RM
@@ -557,7 +705,7 @@ function HandoverView({
         </thead>
         <tbody>
           {[...duties, ...conflicts].map((i) => (
-            <tr key={i.item_id}>
+            <tr key={i.item_id} id={`item-${i.item_id}`} className={open.includes(i) ? "unresolved" : ""}>
               <td>{i.kind === "conflict" ? "Conflict fact" : "Commitment"}</td>
               <td className="meta">{i.kind}</td>
               <td>{i.owner || "—"}</td>
@@ -571,8 +719,8 @@ function HandoverView({
                     try {
                       await api.assign(handover.handover_id, i.item_id, "sara.rm", "2026-09-26");
                       onReload();
-                    } catch (e: any) {
-                      onError(e?.error?.message || "assign failed");
+                    } catch (err: any) {
+                      onError(err?.error?.message || "assign failed");
                     }
                   }}
                 >
@@ -595,19 +743,39 @@ function HandoverView({
                 note || undefined
               );
               onReload();
-            } catch (e: any) {
-              onError(e?.error?.message || "accept failed");
+            } catch (err: any) {
+              onError(err?.error?.message || "accept failed");
             }
           }}
         >
           Accept duties / return conflicts
         </button>
       </div>
-      <p className="meta">accepted: {accepted} · returned: {returned}</p>
+      <p className="meta">
+        accepted: {accepted} · returned: {returned}
+      </p>
 
       <h3>
         <span className="step">3</span> Close transfer
       </h3>
+      {blockers.length > 0 ? (
+        <div className="banner error">
+          <p style={{ margin: "2px 0 6px", fontWeight: 600 }}>Transfer cannot close yet — {blockers.length} blocker(s):</p>
+          {blockers.map((b, i) => (
+            <p key={i} style={{ margin: "3px 0" }}>
+              ⛔ {b.item_id ? (
+                <a href={`#item-${b.item_id}`} style={{ color: "inherit" }}>
+                  {b.reason}
+                </a>
+              ) : (
+                b.reason
+              )}
+            </p>
+          ))}
+        </div>
+      ) : handover.status !== "closed" ? (
+        <p className="ok-text">✓ Readiness checks pass — the transfer can close.</p>
+      ) : null}
       {closeMsg.length > 0 && (
         <div className="banner error">
           {closeMsg.map((m, i) => (
@@ -619,23 +787,27 @@ function HandoverView({
       )}
       <button
         className="primary"
+        disabled={handover.status === "closed" || blockers.length > 0}
         onClick={async () => {
           setCloseMsg([]);
           try {
             await api.close(handover.handover_id);
             onReload();
-          } catch (e: any) {
-            setCloseMsg(e?.error?.details?.blocking_reasons || [e?.error?.message || "close failed"]);
+          } catch (err: any) {
+            setCloseMsg(err?.error?.details?.blocking_reasons || [err?.error?.message || "close failed"]);
             onReload();
           }
         }}
       >
-        Close transfer
+        {handover.status === "closed" ? "Transfer closed" : "Close transfer"}
       </button>
     </section>
   );
 }
 
+function T2(s: string) {
+  return s;
+}
 function AgentsView() {
   type Overview = Awaited<ReturnType<typeof api.agentsOverview>>;
   const [data, setData] = useState<Overview | null>(null);
@@ -764,6 +936,70 @@ function AgentsView() {
           ))}
         </tbody>
       </table>
+    </section>
+  );
+}
+
+
+function EvalsView() {
+  type Evals = Awaited<ReturnType<typeof api.evals>>;
+  const [data, setData] = useState<Evals | null>(null);
+  const [err, setErr] = useState("");
+  useEffect(() => {
+    api.evals().then(setData).catch((e) => setErr(e?.error?.message || "failed to load"));
+  }, []);
+  if (err) return <p className="banner error">{err}</p>;
+  if (!data) return <p className="meta">Loading eval snapshot…</p>;
+
+  return (
+    <section>
+      <h2>Release gates — synthetic golden set</h2>
+      <p className="meta">
+        Generated {data.generated_at?.slice(0, 19).replace("T", " ") || "—"} · routes:{" "}
+        {Object.entries(data.routes || {})
+          .map(([k, v]) => `${k}=${v}`)
+          .join(", ")}
+      </p>
+      <div className="stats">
+        <div className="stat">
+          <span className={`n ${data.gates.all_gates_green ? "" : "warn"}`}>
+            {data.gates.all_gates_green ? "PASS" : "FAIL"}
+          </span>
+          <span className="l">all gates green</span>
+        </div>
+        <div className="stat">
+          <span className="n">
+            {data.gates.checks_passed}/{data.gates.checks_total}
+          </span>
+          <span className="l">checks passed</span>
+        </div>
+        <div className="stat">
+          <span className="n">{Math.round(data.gates.numeric_exactness * 100)}%</span>
+          <span className="l">numeric exactness</span>
+        </div>
+      </div>
+      <p className="meta" style={{ margin: "6px 0 16px" }}>
+        Gates: numeric exactness 100% · unsupported material claims 0 · cross-group leakage 0 ·
+        critical recall ≥ 95% · Arabic–English gap under 3 pts. Synthetic data only — never Warba
+        results. Re-run: <code>make eval</code>.
+      </p>
+      <div className="cards">
+        {data.cases.map((c) => (
+          <div key={c.case_id} className="card">
+            <div className="status-line">
+              <span className="gid">{c.case_id}</span>
+              <span className={`pill ${c.passed ? "closed" : "open"}`}>{c.passed ? "pass" : "fail"}</span>
+            </div>
+            <ul className="eval-checks">
+              {c.checks.map((k, i) => (
+                <li key={i} className={k.ok ? "" : "bad"}>
+                  {k.ok ? "✓" : "✗"} {k.name}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
     </section>
   );
 }

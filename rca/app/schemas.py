@@ -169,12 +169,19 @@ class ItemOut(Strict):
     ref_id: str | None = None
 
 
+class BlockingReason(Strict):
+    reason: str
+    item_id: str | None = None
+
+
 class HandoverDetail(Envelope):
     handover_id: str
     group_id: str
     from_rm: str
     to_rm: str
     status: str
+    ready: bool = True
+    blocking: list[BlockingReason] = []
     items: list[ItemOut]
 
 

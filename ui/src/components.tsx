@@ -1,4 +1,4 @@
-import type { Evidence } from "./api";
+import type { Evidence, Fact } from "./api";
 
 const CHIP_TXT: Record<string, string> = {
   verified: "Verified",
@@ -8,10 +8,20 @@ const CHIP_TXT: Record<string, string> = {
   escalate: "Escalate",
 };
 
-export function LabelChip({ label, reasons }: { label: string; reasons?: string[] }) {
+// Guide §26.3: bilingual chips (EN / AR)
+const CHIP_TXT_AR: Record<string, string> = {
+  verified: "موثّق",
+  needs_review: "يحتاج مراجعة",
+  conflict: "تعارض",
+  not_in_records: "غير موجود في السجلات",
+  escalate: "تم التصعيد",
+};
+
+export function LabelChip({ label, reasons, ar }: { label: string; reasons?: string[]; ar?: boolean }) {
+  const txt = ar ? CHIP_TXT_AR[label] || label : CHIP_TXT[label] || label;
   return (
-    <span className={`chip ${label}`} title={(reasons || []).join("\n")}>
-      {CHIP_TXT[label] || label}
+    <span className={`chip ${label}`} title={(reasons || []).join("\n")} dir={ar ? "rtl" : undefined}>
+      {txt}
     </span>
   );
 }
@@ -69,4 +79,55 @@ export function fmtKwd(v: string | null): string {
   if (!v) return "—";
   const n = parseFloat(v);
   return "KWD " + n.toLocaleString("en-KW", { maximumFractionDigits: 0 });
+}
+
+/** Walkthrough screen: Conflict view — both values side by side with dates and
+ * systems, and "Assign to owner" wired to the transfer exception. */
+export function ConflictCard({
+  fact,
+  ar,
+  canAssign,
+  linked,
+  onAssign,
+  onOpenSource,
+}: {
+  fact: Fact;
+  ar?: boolean;
+  canAssign: boolean;
+  linked: { handover_id: string | null; item_id: string | null } | null;
+  onAssign: () => void;
+  onOpenSource: (e: Evidence) => void;
+}) {
+  return (
+    <li className="conflict-card">
+      <div className="fact-row">
+        <p dir="auto">
+          <strong>{ar ? "تعارض: " : "Conflict: "}</strong>
+          {fact.text}
+        </p>
+        <div className="fact-side">
+          <LabelChip label={fact.label} reasons={fact.reasons} ar={ar} />
+        </div>
+      </div>
+      <div className="conflict-grid">
+        {fact.evidence.map((e, i) => (
+          <button key={i} className="conflict-side" onClick={() => onOpenSource(e)} dir="auto">
+            <span className={`chip ${i === 0 ? "verified" : "review"}`}>{e.source_system}</span>
+            <span className="meta">{e.as_of} · {e.lang.toUpperCase()}</span>
+            <p>{e.quote}</p>
+          </button>
+        ))}
+      </div>
+      <div className="row" style={{ justifyContent: "space-between" }}>
+        <p className="meta">{fact.reasons.join(" · ")}</p>
+        {canAssign && linked?.item_id ? (
+          <button className="primary" onClick={onAssign}>
+            {ar ? "تعيين المسؤول" : "Assign to owner"}
+          </button>
+        ) : (
+          canAssign && <span className="meta">{ar ? "لا يوجد تحويل مفتوح" : "No open transfer for this group"}</span>
+        )}
+      </div>
+    </li>
+  );
 }

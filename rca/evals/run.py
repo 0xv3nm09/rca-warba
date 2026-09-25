@@ -213,6 +213,12 @@ async def main_async(base: str, report_dir: str) -> int:
     await seed_main()
     async with httpx.AsyncClient(timeout=60) as client:
         results = await run_suite(client, base)
+    from datetime import UTC, datetime
+
+    from rca.settings import get_settings
+
+    results["generated_at"] = datetime.now(UTC).isoformat(timespec="seconds")
+    results["routes"] = {name: r.model for name, r in get_settings().routes().items()}
     Path(report_dir).mkdir(parents=True, exist_ok=True)
     out = Path(report_dir) / "golden_snapshot.json"
     out.write_bytes(orjson.dumps(results, option=orjson.OPT_INDENT_2))

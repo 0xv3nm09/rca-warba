@@ -1,11 +1,24 @@
+from pathlib import Path
+
+import orjson
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from rca.app.deps import get_db, require_role
+from rca.app.errors import NotFound
 from rca.audit import writer as audit
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+
+@router.get("/evals")
+async def evals_snapshot(s=Depends(require_role("team_lead", "admin"))):
+    """The stored golden-set snapshot (release gates). Regenerate with `make eval`."""
+    p = Path("reports/golden_snapshot.json")
+    if not p.exists():
+        raise NotFound("No eval snapshot found; run: make eval")
+    return orjson.loads(p.read_bytes())
 
 
 @router.get("/audit/verify")
