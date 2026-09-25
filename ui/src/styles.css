@@ -674,3 +674,4 @@ body.demo-mode main { padding-inline-end: 300px; }
 }
 .ref-form button.ghost { background: transparent; color: var(--ink-2); border: 1px solid var(--line-2); }
 .toast.ok { background: var(--ok-700); }
+.eval-checks { max-height: 220px; overflow: auto; }

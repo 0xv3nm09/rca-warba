@@ -49,3 +49,17 @@ async def test_close_blocked_without_owner(client, seeded_handover):
     assert r.status_code == 409
     reasons = r.json()["error"]["details"]["blocking_reasons"]
     assert any("owner" in x.lower() or "conflict" in x.lower() for x in reasons)
+
+
+@pytest.mark.asyncio
+async def test_live_failure_mode_probes_pass(client):
+    """The Evals screen's live probes: same §10 checks, executed against the
+    running service path. Non-destructive; local profile only."""
+    t = await token_for(client, "lead.one")
+    r = await client.post("/admin/failure-modes/live", headers=H(t))
+    assert r.status_code == 200, r.text
+    checks = {c["id"]: c for c in r.json()["checks"]}
+    assert checks["fm1"]["status"] == "pass"
+    assert checks["fm2"]["status"] == "pass"
+    assert checks["fm3"]["status"] == "pass"
+    assert checks["fm4"]["status"] in {"pass", "skipped"}

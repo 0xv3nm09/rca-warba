@@ -1628,9 +1628,80 @@ function AgentsView({ onOpenGroup }: { onOpenGroup: (groupId: string) => void })
 }
 
 
+const FAILURE_MODES = [
+  {
+    id: "fm1",
+    name: "Invented facts in grounded answers",
+    real: "Leading RAG legal tools still hallucinate in 17–33% of answers (Stanford)",
+    control: "Every claim needs a matching source span, exact number match and an entailment check — otherwise “not in records”",
+    test: "test_unrecorded_approval_is_never_claimed",
+    gate: "Numeric exactness 100% · unsupported material claims 0",
+  },
+  {
+    id: "fm3",
+    name: "Oversharing through inherited permissions",
+    real: "Oversharing led 40% of IT leaders to delay Copilot rollouts by 3+ months (Gartner)",
+    control: "Access comes from CRM coverage; one client group per session; filter applied before retrieval",
+    test: "test_cross_group_leak_zero",
+    gate: "Cross-group leakage 0",
+  },
+  {
+    id: "fm2",
+    name: "Hidden instructions in emails",
+    real: "EchoLeak (CVE-2025-32711) pulled data out of an enterprise assistant with one crafted email",
+    control: "Emails reach only the tool-less extractor; retrieved text can never choose the next action",
+    test: "test_injection_email_has_no_effect",
+    gate: "Injection success ≤ 1%",
+  },
+  {
+    id: "fm4",
+    name: "Agent ignores its instructions",
+    real: "A coding agent deleted a live production database during a code freeze",
+    control: "Prompts are not controls: read-only credentials, no write tools, approvals enforced in code",
+    test: "test_close_blocked_without_owner",
+    gate: "Critical commitments owned and dated 100%",
+  },
+  {
+    id: null,
+    name: "People trust AI too much",
+    real: "A 2025 review of 35 studies: explanations alone rarely reduce automation bias",
+    control: "Material facts need an explicit check with the source open; the pilot seeds known errors to measure catch rate",
+    test: "pilot measure — seeded-error audits",
+    gate: "Catch rate reported weekly, never per individual",
+  },
+  {
+    id: null,
+    name: "Overconfident self-scores",
+    real: "Models asked for confidence tend to be overconfident",
+    control: "Confidence is computed from checks (span, numbers, entailment) and calibrated; shown as plain labels",
+    test: "unit tests — domain/confidence.py",
+    gate: "Calibration ECE ≤ 0.05",
+  },
+  {
+    id: null,
+    name: "Pilots that never pay back",
+    real: "MIT NANDA: 95% of generative AI pilots stall, mostly poor workflow integration",
+    control: "One pain point, measured baseline, go/no-go at week 8, stop if savings don't cover cost",
+    test: "roadmap §13–14",
+    gate: "Fixed-fee pilot, then per-RM licence against measured savings",
+  },
+  {
+    id: null,
+    name: "Weaker quality in Arabic",
+    real: "Models tested in Arabic default to Western cultural associations",
+    control: "Bilingual golden set; Arabic–English quality gap under 3 points as a release gate",
+    test: "golden suite — Arabic quotes verified verbatim",
+    gate: "Arabic–English gap < 3 pts",
+  },
+];
+
 function EvalsView() {
   type Evals = Awaited<ReturnType<typeof api.evals>>;
+  type Live = Awaited<ReturnType<typeof api.failureModesLive>>;
   const [data, setData] = useState<Evals | null>(null);
+  const [live, setLive] = useState<Live | null>(null);
+  const [running, setRunning] = useState(false);
+  const [liveErr, setLiveErr] = useState("");
   const [err, setErr] = useState("");
   useEffect(() => {
     api.evals().then(setData).catch((e) => setErr(e?.error?.message || "failed to load"));
@@ -1696,6 +1767,85 @@ function EvalsView() {
             </ul>
           </div>
         ))}
+      </div>
+
+      <h3>
+        <span className="step">⚠</span> Known AI failure modes — proposal §10, proven in this build
+      </h3>
+      <div className="row" style={{ justifyContent: "space-between", marginBottom: 10 }}>
+        <p className="meta">
+          Each §10 failure, the control that prevents it, and its proof. Live probes drive the same
+          service path a user triggers — non-destructive, on synthetic data.
+        </p>
+        <button
+          className="ghost"
+          disabled={running}
+          onClick={async () => {
+            setRunning(true);
+            setLiveErr("");
+            try {
+              setLive(await api.failureModesLive());
+            } catch (e: any) {
+              setLiveErr(e?.error?.message || "live checks failed — try again in a moment");
+            }
+            setRunning(false);
+          }}
+        >
+          {running ? "Running…" : live ? "Re-run live checks" : "Run live checks"}
+        </button>
+      </div>
+      {live && (
+        <p className="meta" style={{ marginBottom: 10 }}>
+          Ran {live.run_at.slice(11, 19)} UTC · model route: {live.model_route} · {live.note}
+        </p>
+      )}
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Known failure (real case)</th>
+              <th>Our control</th>
+              <th>Proof in this build</th>
+              <th>Live</th>
+            </tr>
+          </thead>
+          <tbody>
+            {FAILURE_MODES.map((fm) => {
+              const lc = live?.checks.find((c) => c.id === fm.id);
+              return (
+                <tr key={fm.name}>
+                  <td>
+                    <strong>{fm.name}</strong>
+                    <p className="meta" style={{ margin: 0 }}>
+                      {fm.real}
+                    </p>
+                  </td>
+                  <td>{fm.control}</td>
+                  <td>
+                    <code>{fm.test}</code>
+                    <p className="meta" style={{ margin: 0 }}>
+                      {fm.gate}
+                    </p>
+                  </td>
+                  <td>
+                    {fm.id ? (
+                      lc ? (
+                        <span className={`chip ${lc.status === "pass" ? "verified" : lc.status === "skipped" ? "absent" : "conflict"}`}>
+                          {lc.status}
+                        </span>
+                      ) : (
+                        <span className="meta">not run</span>
+                      )
+                    ) : (
+                      <span className="meta">gate / pilot</span>
+                    )}
+                    {lc && <p className="meta" style={{ margin: 0 }}>{lc.detail}</p>}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </section>
   );

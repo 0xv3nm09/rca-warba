@@ -244,6 +244,13 @@ export const api = {
       "GET",
       `/groups/${groupId}/handover-link`
     ),
+  failureModesLive: () =>
+    call<{
+      checks: { id: string; status: string; detail: string }[];
+      model_route: string;
+      run_at: string;
+      note: string;
+    }>("POST", "/admin/failure-modes/live"),
   evals: () =>
     call<{
       generated_at?: string;
