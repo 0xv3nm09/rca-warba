@@ -6,6 +6,12 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://rca:rca@localhost:5433/rca")
+# Tests must never depend on a cloud model quota: pin the deterministic routes
+# regardless of what the developer's .env points at.
+for _v in ("LLM_EXTRACT_MODEL", "LLM_DRAFT_MODEL", "LLM_CLASSIFY_MODEL"):
+    os.environ[_v] = "dummy-" + _v.split("_")[1].lower()
+for _v in ("LLM_EXTRACT_BASE_URL", "LLM_DRAFT_BASE_URL", "LLM_CLASSIFY_BASE_URL"):
+    os.environ[_v] = "local"
 
 from rca.app.main import app  # noqa: E402
 from rca.db.session import create_all, make_engine, make_sessionmaker  # noqa: E402

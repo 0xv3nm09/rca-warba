@@ -29,7 +29,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile
-    command: sh -c "python -m rca.adapters.dummy.seed && uvicorn rca.app.main:app --host 0.0.0.0 --port 8000"
+    command: sh -c "LLM_EXTRACT_MODEL=dummy-extractor LLM_EXTRACT_BASE_URL=local LLM_DRAFT_MODEL=dummy-drafter LLM_DRAFT_BASE_URL=local LLM_CLASSIFY_MODEL=dummy-classifier LLM_CLASSIFY_BASE_URL=local python -m rca.adapters.dummy.seed && uvicorn rca.app.main:app --host 0.0.0.0 --port 8000"
     environment:
       RCA_PROFILE: local
       DATABASE_URL: postgresql+asyncpg://rca:rca@postgres:5432/rca
