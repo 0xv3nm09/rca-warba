@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from rca.app.deps import get_db, require_role
+from rca.app.deps import current_session, get_db, require_role
 from rca.app.errors import NotFound
 from rca.audit import writer as audit
 
@@ -13,8 +13,10 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 
 
 @router.get("/evals")
-async def evals_snapshot(s=Depends(require_role("team_lead", "admin"))):
-    """The stored golden-set snapshot (release gates). Regenerate with `make eval`."""
+async def evals_snapshot(s=Depends(current_session)):
+    """The stored golden-set snapshot (release gates). Readable by every signed-in
+    member of staff - trust is visible; there is nothing client-sensitive here.
+    Regenerate with `make eval`. Audit/trigger admin actions remain lead-only."""
     p = Path("reports/golden_snapshot.json")
     if not p.exists():
         raise NotFound("No eval snapshot found; run: make eval")

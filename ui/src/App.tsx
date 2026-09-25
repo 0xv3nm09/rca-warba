@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  allowedGroups,
   api,
   clearAuth,
   currentUser,
@@ -355,7 +356,7 @@ function Login() {
             onClick={async () => {
               try {
                 const d = await api.login(u.id, u.group);
-                setAuth(d.session_token, u.id, u.group);
+                setAuth(d.session_token, u.id, u.group, d.allowed_groups);
                 location.reload();
               } catch {
                 setErr("Login failed");
@@ -516,7 +517,7 @@ function FileView({
   const [tab, setTab] = useState<"brief" | "timeline" | "commitments" | "people" | "sources">("brief");
   const [ar, setAr] = useState(false);
   const [link, setLink] = useState<{ handover_id: string | null; items: { item_id: string; kind: string; ref_id: string | null; status: string }[] }>({ handover_id: null, items: [] });
-  const groups = ["GHC-001", "ALS-014", "NLG-022"];
+  const groups = allowedGroups();
   const canAssign = currentUser === "lead.one";
 
   const loadLink = useCallback(() => {
@@ -1101,7 +1102,16 @@ function AgentsView() {
   useEffect(() => {
     api.agentsOverview().then(setData).catch((e) => setErr(e?.error?.message || "failed to load"));
   }, []);
-  if (err) return <p className="banner error">{err}</p>;
+  if (err)
+    return (
+      <section>
+        <h2>Agentic workflow</h2>
+        <div className="role-note">
+          <strong>Not available right now.</strong> The agent overview needs the API to be up —
+          try refreshing. <span className="meta">{err}</span>
+        </div>
+      </section>
+    );
   if (!data) return <p className="meta">Loading agent overview…</p>;
 
   const statusPill = (s: string) =>
@@ -1283,7 +1293,17 @@ function EvalsView() {
   useEffect(() => {
     api.evals().then(setData).catch((e) => setErr(e?.error?.message || "failed to load"));
   }, []);
-  if (err) return <p className="banner error">{err}</p>;
+  if (err)
+    return (
+      <section>
+        <h2>Release gates — synthetic golden set</h2>
+        <div className="role-note">
+          <strong>Not available right now.</strong> The evaluation snapshot appears once the
+          golden suite has been run (<code>make eval</code>) and is readable by all signed-in
+          staff. <span className="meta">{err}</span>
+        </div>
+      </section>
+    );
   if (!data) return <p className="meta">Loading eval snapshot…</p>;
 
   return (

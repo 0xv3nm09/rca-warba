@@ -597,3 +597,11 @@ main { max-width: 1200px; margin: 0 auto; }
 }
 .demo-rail button:hover { background: var(--navy-100); }
 @media (max-width: 1100px) { .demo-rail { display: none; } }
+
+/* ---- calm role-gated / unavailable states ---- */
+.role-note {
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 16px 20px; font-size: 14px; color: var(--ink-2); box-shadow: var(--shadow);
+  max-width: 560px;
+}
+.role-note strong { color: var(--ink); }

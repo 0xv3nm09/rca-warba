@@ -4,7 +4,8 @@ __pycache__/
 .env
 data/
 dist/
-reports/
+reports/*
+!reports/golden_snapshot.json
 node_modules/
 ui/dist/
 .pytest_cache/

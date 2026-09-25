@@ -104,13 +104,24 @@ let token: string | null = localStorage.getItem("rca_token");
 export let currentUser: string = localStorage.getItem("rca_user") || "";
 export let currentGroup: string | null = localStorage.getItem("rca_group");
 
-export function setAuth(t: string, user: string, group: string | null) {
+export function setAuth(t: string, user: string, group: string | null, allowedGroups?: string[]) {
   token = t;
   currentUser = user;
   currentGroup = group;
   localStorage.setItem("rca_token", t);
   localStorage.setItem("rca_user", user);
   if (group) localStorage.setItem("rca_group", group);
+  if (allowedGroups) localStorage.setItem("rca_groups", JSON.stringify(allowedGroups));
+}
+
+export function allowedGroups(): string[] {
+  try {
+    const v = JSON.parse(localStorage.getItem("rca_groups") || "");
+    if (Array.isArray(v) && v.length) return v;
+  } catch {
+    /* fall through to default */
+  }
+  return ["GHC-001", "ALS-014", "NLG-022"];
 }
 
 export function clearAuth() {
@@ -145,7 +156,10 @@ async function call<T>(method: string, path: string, body?: unknown, signal?: Ab
 
 export const api = {
   login: (user: string, group: string | null) =>
-    call<{ session_token: string }>("POST", "/auth/dev-login", { user, group }),
+    call<{ session_token: string; allowed_groups: string[] }>("POST", "/auth/dev-login", {
+      user,
+      group,
+    }),
   board: () => call<{ transfers: BoardItem[] }>("GET", "/handovers"),
   file: (groupId: string) => call<ClientFile>("GET", `/groups/${groupId}/file`),
   ask: (groupId: string, question: string, signal?: AbortSignal) =>

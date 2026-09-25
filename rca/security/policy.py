@@ -14,6 +14,8 @@ COVERAGE = {
     "lead.one": {"GHC-001", "ALS-014", "NLG-022"},
 }
 
+ALL_GROUPS = sorted({g for gs in COVERAGE.values() for g in gs})
+
 ROLES = {
     "sara.rm": ["rm"],
     "omar.rm": ["rm"],

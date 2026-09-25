@@ -189,3 +189,25 @@ async def test_referral_lists_valid_documents_only(client):
     assert pack["decision_needed_by"] <= "2026-10-06"  # a week before expiry
     r2 = await client.post("/agents/referrals", headers=H(t_sara), json=body)
     assert r2.json()["pack"]["doc_id"] == pack["doc_id"]  # running twice never duplicates
+
+
+async def test_evals_readable_by_all_roles(client):
+    """Release gates are safety evidence: every signed-in role can read them
+    (no judge or RM ever sees an access error on the Evals screen)."""
+    _, t_sara, t_lead = await seeded_ids(client)
+    for tok in (t_sara, t_lead):
+        r = await client.get("/admin/evals", headers=H(tok))
+        assert r.status_code == 200, r.text
+        assert r.json()["gates"]["all_gates_green"] is True
+
+
+async def test_login_returns_allowed_groups(client):
+    """The console scopes the group selector to the caller's coverage, so a
+    judge can't select a client group that would 403."""
+    t_omar = await token_for(client, "omar.rm", "GHC-001")
+    t_lead = await token_for(client, "lead.one")
+    r = await client.post("/auth/dev-login", json={"user": "omar.rm", "group": "GHC-001"})
+    assert r.json()["allowed_groups"] == ["GHC-001"]
+    r = await client.post("/auth/dev-login", json={"user": "lead.one"})
+    assert r.json()["allowed_groups"] == ["ALS-014", "GHC-001", "NLG-022"]
+    assert t_omar and t_lead

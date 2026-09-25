@@ -106,6 +106,7 @@ class TokenResponse(Envelope):
     user: str
     roles: list[str]
     group_id: str | None
+    allowed_groups: list[str] = []
 
 
 class HandoverCreate(Strict):
