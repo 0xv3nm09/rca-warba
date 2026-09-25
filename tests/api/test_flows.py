@@ -211,3 +211,29 @@ async def test_login_returns_allowed_groups(client):
     r = await client.post("/auth/dev-login", json={"user": "lead.one"})
     assert r.json()["allowed_groups"] == ["ALS-014", "GHC-001", "NLG-022"]
     assert t_omar and t_lead
+
+
+async def test_alert_status_resolves_when_fixed(client):
+    """Cross-screen consistency: alerts are history and never rewritten, but the
+    Agents screen joins live state at read time, so an alert shows 'resolved'
+    once the client file / transfer has actually fixed the condition."""
+    t_lead = await token_for(client, "lead.one")
+    r = await client.get("/agents/overview", headers=H(t_lead))
+    alerts = {a["kind"]: a for a in r.json()["alerts"]}
+    assert alerts["expiry_no_owner"]["status"] == "open"
+
+    hov = r.json()["triggers"][2]["output"]  # handover_started fired
+    det = (await client.get(f"/handovers/{hov}", headers=H(t_lead))).json()
+    for it in det["items"]:
+        if it["kind"] in {"commitment", "conflict"}:
+            await client.post(
+                f"/handovers/{hov}/exceptions/{it['item_id']}/assign",
+                headers=H(t_lead),
+                json={"owner": "sara.rm", "due_date": "2026-09-26"},
+            )
+
+    r2 = await client.get("/agents/overview", headers=H(t_lead))
+    alerts2 = {a["kind"]: a for a in r2.json()["alerts"]}
+    assert alerts2["expiry_no_owner"]["status"] == "resolved"
+    alerts_board = (await client.get("/alerts", headers=H(t_lead))).json()["alerts"]
+    assert all("status" in a for a in alerts_board)

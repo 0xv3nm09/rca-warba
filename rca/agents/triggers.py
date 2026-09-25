@@ -236,3 +236,35 @@ async def prepare_referral_pack(
     await db.commit()
     log.info("referral_pack_ready", group_id=group_id, to_role=to_role)
     return {"doc_id": doc_id, **payload}
+
+
+async def alert_statuses(db, today_: date) -> dict[str, str]:
+    """Live resolution status per alert id. Alerts are append-only history and
+    are never rewritten; this read-time join tells the UI whether the condition
+    still holds ("open") or has since been fixed ("resolved") - so the Agents
+    screen and the client file can never contradict each other."""
+    alerts = list((await db.execute(select(AlertRow))).scalars())
+    if not alerts:
+        return {}
+    facts = list((await db.execute(select(FactRow))).scalars())
+    comms = list((await db.execute(select(CommitmentRow))).scalars())
+    out: dict[str, str] = {}
+    for a in alerts:
+        status = "open"
+        if a.kind == "expiry_no_owner":
+            fid = a.raised_once_key.split(":", 1)[-1]
+            facility = next((x for x in facts if x.kind == "facility" and fid in x.text), None)
+            owned = facility is not None and any(
+                c.entity_id == facility.entity_id
+                and c.owner
+                and c.state not in {"closed", "withdrawn"}
+                for c in comms
+                if c.group_id == facility.group_id
+            )
+            status = "resolved" if owned else "open"
+        elif a.kind == "promise_overdue":
+            cid = a.raised_once_key.split(":", 1)[-1]
+            commitment = next((x for x in comms if x.id == cid), None)
+            status = "open" if (commitment and commitment.state == "requested") else "resolved"
+        out[a.id] = status
+    return out

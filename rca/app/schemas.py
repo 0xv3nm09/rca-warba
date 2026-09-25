@@ -192,3 +192,4 @@ class AlertOut(Strict):
     group_id: str | None
     text: str
     to_role: str
+    status: str = "open"

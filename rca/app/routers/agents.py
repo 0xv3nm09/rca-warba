@@ -156,6 +156,9 @@ async def overview(s=Depends(current_session), db: AsyncSession = Depends(get_db
         if d.kind == "referral_pack"
     ]
 
+    from rca.agents.triggers import alert_statuses
+
+    statuses = await alert_statuses(db, t)
     audit_tail = list(
         (await db.execute(select(AuditEvent).order_by(AuditEvent.seq.desc()).limit(8))).scalars()
     )
@@ -168,7 +171,14 @@ async def overview(s=Depends(current_session), db: AsyncSession = Depends(get_db
         "cover_briefs": briefs,
         "referral_packs": referrals,
         "alerts": [
-            {"alert_id": a.id, "kind": a.kind, "group_id": a.group_id, "text": a.text, "to_role": a.to_role}
+            {
+                "alert_id": a.id,
+                "kind": a.kind,
+                "group_id": a.group_id,
+                "text": a.text,
+                "to_role": a.to_role,
+                "status": statuses.get(a.id, "open"),
+            }
             for a in alerts
         ],
         "audit_tail": [

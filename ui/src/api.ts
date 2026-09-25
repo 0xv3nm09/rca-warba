@@ -182,7 +182,7 @@ export const api = {
     call("POST", `/handovers/${hid}/exceptions/${itemId}/assign`, { owner, due_date }),
   close: (hid: string) => call<{ closed: boolean }>("POST", `/handovers/${hid}/close`),
   alerts: () =>
-    call<{ alerts: { alert_id: string; kind: string; group_id: string | null; text: string; to_role: string }[] }>(
+    call<{ alerts: { alert_id: string; kind: string; group_id: string | null; text: string; to_role: string; status: string }[] }>(
       "GET",
       "/alerts"
     ),
@@ -223,7 +223,14 @@ export const api = {
         history: string[];
         decision_needed_by: string;
       }[];
-      alerts: { alert_id: string; kind: string; group_id: string | null; text: string; to_role: string }[];
+      alerts: {
+        alert_id: string;
+        kind: string;
+        group_id: string | null;
+        text: string;
+        to_role: string;
+        status: string;
+      }[];
       audit_tail: { seq: number; ts: string; actor: string; action: string; subject: string }[];
     }>("GET", "/agents/overview"),
   handoverLink: (groupId: string) =>

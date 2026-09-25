@@ -310,7 +310,15 @@ export default function App() {
         {view === "handover" && (
           <HandoverView handover={handover} onReload={() => handover && loadHandover(handover.handover_id)} onError={showError} />
         )}
-        {view === "agents" && <AgentsView />}
+        {view === "agents" && (
+          <AgentsView
+            onOpenGroup={(g) => {
+              setGroup(g);
+              setView("file");
+              loadFile(g);
+            }}
+          />
+        )}
         {view === "evals" && <EvalsView />}
       </main>
 
@@ -392,7 +400,7 @@ function Board({
   onOpen: (id: string) => void;
   onReload: () => void;
 }) {
-  const [alerts, setAlerts] = useState<{ alert_id: string; kind: string; text: string; group_id: string | null }[]>([]);
+  const [alerts, setAlerts] = useState<{ alert_id: string; kind: string; text: string; group_id: string | null; status: string }[]>([]);
   useEffect(() => {
     api.alerts().then((d) => setAlerts(d.alerts)).catch(() => {});
   }, []);
@@ -476,7 +484,12 @@ function Board({
             <h3 style={{ marginTop: 0 }}>Agent alerts</h3>
             {alerts.map((a) => (
               <div key={a.alert_id} className="alert-item">
-                <span className="chip escalate">{a.kind.replace(/_/g, " ")}</span>
+                <div className="row">
+                  <span className="chip escalate">{a.kind.replace(/_/g, " ")}</span>
+                  <span className={`chip ${a.status === "resolved" ? "verified" : "conflict"}`}>
+                    {a.status}
+                  </span>
+                </div>
                 <p>{a.text}</p>
                 <span className="meta">
                   raised automatically · routed to {a.group_id ? `${a.group_id} team lead` : "team lead"}
@@ -1319,7 +1332,7 @@ function HandoverView({
   );
 }
 
-function AgentsView() {
+function AgentsView({ onOpenGroup }: { onOpenGroup: (groupId: string) => void }) {
   type Overview = Awaited<ReturnType<typeof api.agentsOverview>>;
   const [data, setData] = useState<Overview | null>(null);
   const [err, setErr] = useState("");
@@ -1477,6 +1490,34 @@ function AgentsView() {
           )}
         </div>
       ))}
+
+      <h3>
+        <span className="step">!</span> Alerts — raised automatically, resolved by people
+      </h3>
+      <div className="cards">
+        {data.alerts.map((a) => (
+          <div key={a.alert_id} className="card">
+            <div className="status-line">
+              <span className="chip escalate">{a.kind.replace(/_/g, " ")}</span>
+              <span className={`chip ${a.status === "resolved" ? "verified" : "conflict"}`}>
+                {a.status === "resolved" ? "resolved since" : "still open"}
+              </span>
+            </div>
+            <p style={{ margin: "6px 0" }}>{a.text}</p>
+            <div className="row" style={{ justifyContent: "space-between" }}>
+              <span className="meta">
+                routed to {a.group_id ? `${a.group_id} team lead` : "team lead"}
+              </span>
+              {a.group_id && (
+                <button className="assign-btn" onClick={() => onOpenGroup(a.group_id!)}>
+                  Open client file →
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+        {data.alerts.length === 0 && <p className="meta">No alerts raised.</p>}
+      </div>
 
       <h3>
         <span className="step">✎</span> Audit tail (hash-chained)
