@@ -161,5 +161,35 @@ export const api = {
       "GET",
       "/alerts"
     ),
+  agentsOverview: () =>
+    call<{
+      as_of: string;
+      pattern: string;
+      principles: string[];
+      triggers: {
+        trigger: string;
+        label: string;
+        source: string;
+        job: string;
+        effect: string;
+        human_step: string;
+        use_case: number;
+        status: string;
+        output: string | null;
+        when: string | null;
+      }[];
+      cover_briefs: {
+        doc_id: string;
+        for: string | null;
+        covering: string;
+        from: string;
+        to: string;
+        groups: string[];
+        due_during_cover: { item: string; owner: string | null; label: string }[];
+        do_not_say: string[];
+      }[];
+      alerts: { alert_id: string; kind: string; group_id: string | null; text: string; to_role: string }[];
+      audit_tail: { seq: number; ts: string; actor: string; action: string; subject: string }[];
+    }>("GET", "/agents/overview"),
   auditVerify: () => call<{ chain_valid: boolean }>("GET", "/admin/audit/verify"),
 };

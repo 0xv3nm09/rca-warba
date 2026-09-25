@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 
 from rca.ai.gateway import ModelGateway
 from rca.app import errors
-from rca.app.routers import admin, ask, auth, files, handovers, health, insights, triage
+from rca.app.routers import admin, agents, ask, auth, files, handovers, health, insights, triage
 from rca.db.session import create_all, make_engine, make_sessionmaker
 from rca.settings import get_settings
 
@@ -55,7 +55,7 @@ def create_app() -> FastAPI:
         resp.headers["Cache-Control"] = "no-store"
         return resp
 
-    for r in (health, auth, files, ask, handovers, triage, insights, admin):
+    for r in (health, auth, files, ask, handovers, triage, insights, agents, admin):
         app.include_router(r.router)
 
     # Serve the built console (single container serves UI + API).

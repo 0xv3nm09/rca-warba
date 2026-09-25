@@ -13,7 +13,7 @@ import {
 } from "./api";
 import { Citation, ConfidenceBand, fmtDate, fmtKwd, LabelChip, SourceDrawer } from "./components";
 
-type View = "board" | "file" | "handover";
+type View = "board" | "file" | "handover" | "agents";
 
 const DEMO_USERS = [
   { id: "sara.rm", label: "Sara — incoming RM", role: "RM · GHC-001", group: "GHC-001" },
@@ -85,6 +85,9 @@ export default function App() {
           <button className={view === "file" ? "on" : ""} onClick={() => setView("file")}>
             Client file
           </button>
+          <button className={view === "agents" ? "on" : ""} onClick={() => setView("agents")}>
+            Agents
+          </button>
         </nav>
         <div className="who">
           <span className="avatar">{initials}</span>
@@ -145,6 +148,7 @@ export default function App() {
         {view === "handover" && (
           <HandoverView handover={handover} onReload={() => handover && loadHandover(handover.handover_id)} onError={setError} />
         )}
+        {view === "agents" && <AgentsView />}
       </main>
 
       <SourceDrawer ev={drawer} onClose={() => setDrawer(null)} />
@@ -628,6 +632,138 @@ function HandoverView({
       >
         Close transfer
       </button>
+    </section>
+  );
+}
+
+function AgentsView() {
+  type Overview = Awaited<ReturnType<typeof api.agentsOverview>>;
+  const [data, setData] = useState<Overview | null>(null);
+  const [err, setErr] = useState("");
+  useEffect(() => {
+    api.agentsOverview().then(setData).catch((e) => setErr(e?.error?.message || "failed to load"));
+  }, []);
+  if (err) return <p className="banner error">{err}</p>;
+  if (!data) return <p className="meta">Loading agent overview…</p>;
+
+  const statusPill = (s: string) =>
+    s === "fired" ? (
+      <span className="pill closed">fired</span>
+    ) : s === "scheduled" || s === "due" ? (
+      <span className="pill open">{s}</span>
+    ) : s === "not_in_prototype" ? (
+      <span className="pill preparing">planned</span>
+    ) : (
+      <span className="pill preparing">waiting</span>
+    );
+
+  return (
+    <section>
+      <div className="row" style={{ justifyContent: "space-between" }}>
+        <div>
+          <h2>Agentic workflow</h2>
+          <p className="meta">{data.pattern} · as of {data.as_of}</p>
+        </div>
+      </div>
+
+      <div className="principles">
+        {data.principles.map((p) => (
+          <span key={p} className="principle">
+            ✓ {p}
+          </span>
+        ))}
+      </div>
+
+      <h3>
+        <span className="step">→</span> Triggers · jobs · human gates
+      </h3>
+      <div className="cards triggers">
+        {data.triggers.map((t) => (
+          <div key={t.trigger} className={`card trigger ${t.status}`}>
+            <div className="status-line">
+              <span className="gid">{t.label}</span>
+              {statusPill(t.status)}
+            </div>
+            <p className="meta">
+              {t.source} → <code>{t.job}</code> · use case {t.use_case}
+            </p>
+            <p className="trig-effect">{t.effect}</p>
+            {t.output && t.output !== "cover_brief" && t.output !== "return_summary" && (
+              <p className="meta output-line">↳ {t.output}</p>
+            )}
+            <p className="gate">
+              <strong>Human gate:</strong> {t.human_step}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      {data.cover_briefs.map((b) => (
+        <div key={b.doc_id} className="q-card" style={{ marginTop: 18 }}>
+          <div className="row" style={{ justifyContent: "space-between" }}>
+            <p className="q-text">
+              Cover brief for {b.for} — covering {b.covering}, {b.from} → {b.to}
+            </p>
+            <span className="chip verified">drafted automatically</span>
+          </div>
+          <p className="meta" style={{ marginTop: 4 }}>
+            Groups: {b.groups.join(", ")}
+          </p>
+          <table style={{ marginTop: 10 }}>
+            <thead>
+              <tr>
+                <th>Due during cover</th>
+                <th>Owner</th>
+                <th>Label</th>
+              </tr>
+            </thead>
+            <tbody>
+              {b.due_during_cover.map((d, i) => (
+                <tr key={i}>
+                  <td>{d.item}</td>
+                  <td>{d.owner}</td>
+                  <td>
+                    <span className={`chip ${d.label}`}>{d.label}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {b.do_not_say.length > 0 && (
+            <p className="recollection" style={{ marginTop: 10 }}>
+              <strong>Do not say:</strong> {b.do_not_say.join(" · ")}
+            </p>
+          )}
+        </div>
+      ))}
+
+      <h3>
+        <span className="step">✎</span> Audit tail (hash-chained)
+      </h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Seq</th>
+            <th>When</th>
+            <th>Actor</th>
+            <th>Action</th>
+            <th>Subject</th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.audit_tail.map((e) => (
+            <tr key={e.seq}>
+              <td className="meta">{e.seq}</td>
+              <td className="meta">{e.ts.slice(0, 19).replace("T", " ")}</td>
+              <td>{e.actor}</td>
+              <td>
+                <span className="chip">{e.action}</span>
+              </td>
+              <td className="meta">{e.subject}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </section>
   );
 }
