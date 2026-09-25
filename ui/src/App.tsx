@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   api,
   clearAuth,
@@ -11,9 +11,64 @@ import {
   type Evidence,
   type HandoverDetail,
 } from "./api";
-import { Citation, ConflictCard, ConfidenceBand, fmtDate, fmtKwd, LabelChip, SourceDrawer } from "./components";
+import {
+  Citation,
+  ConflictCard,
+  ConfidenceBand,
+  fmtDate,
+  fmtKwd,
+  LabelChip,
+  SkeletonCards,
+  SkeletonRows,
+  SourceDrawer,
+  Toasts,
+} from "./components";
 
 type View = "board" | "file" | "handover" | "agents" | "evals";
+
+/** U9: gentle polling that pauses when the tab is hidden. */
+function usePolling(fn: () => void, ms: number, active: boolean) {
+  useEffect(() => {
+    if (!active) return;
+    let id: number;
+    const tick = () => {
+      if (!document.hidden) fn();
+      id = window.setTimeout(tick, ms);
+    };
+    id = window.setTimeout(tick, ms);
+    return () => window.clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fn, ms, active]);
+}
+
+function Ago({ ts }: { ts: number }) {
+  const [, force] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => force((x) => x + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const sec = Math.max(0, Math.round((Date.now() - ts) / 1000));
+  return <span className="meta">updated {sec < 60 ? `${sec}s` : `${Math.round(sec / 60)}m`} ago</span>;
+}
+
+/** U3: failure-point codes from the proposal (F1–F7). */
+function fcodeFor(reason: string): string {
+  const r = reason.toLowerCase();
+  if (r.includes("owner") && r.includes("expiry")) return "F1";
+  if (r.includes("conflict")) return "F4";
+  if (r.includes("accept")) return "F2";
+  if (r.includes("owner")) return "F1";
+  return "•";
+}
+
+function scrollToItem(itemId: string) {
+  const el = document.getElementById(`item-${itemId}`);
+  if (el) {
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.classList.add("flash");
+    setTimeout(() => el.classList.remove("flash"), 1400);
+  }
+}
 
 const DEMO_USERS = [
   { id: "sara.rm", label: "Sara — incoming RM", role: "RM · GHC-001", group: "GHC-001" },
@@ -30,33 +85,74 @@ export default function App() {
   const [drawer, setDrawer] = useState<Evidence | null>(null);
   const [ask, setAsk] = useState<AskResult | null>(null);
   const [question, setQuestion] = useState("");
-  const [error, setError] = useState<string>("");
+  const [toasts, setToasts] = useState<{ id: number; text: string; kind: string }[]>([]);
+  const toastId = useRef(0);
+  const showError = useCallback((text: string) => {
+    const id = ++toastId.current;
+    setToasts((t) => [...t, { id, text, kind: "error" }]);
+    window.setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 6000);
+  }, []);
+  const [boardLoading, setBoardLoading] = useState(true);
+  const [lastSync, setLastSync] = useState<number>(Date.now());
   const [busy, setBusy] = useState(false);
+  const askAbort = useRef<AbortController | null>(null);
 
   const loadBoard = useCallback(async () => {
     try {
       const d = await api.board();
       setBoard(d.transfers);
+      setLastSync(Date.now());
     } catch (e: any) {
-      setError(e?.error?.message || "failed to load board");
+      showError(e?.error?.message || "failed to load board");
+    } finally {
+      setBoardLoading(false);
     }
-  }, []);
+  }, [showError]);
 
-  const loadFile = useCallback(async (g: string) => {
-    try {
-      setFile(await api.file(g));
-    } catch (e: any) {
-      setError(e?.error?.message || "failed to load file");
-    }
-  }, []);
+  const loadFile = useCallback(
+    async (g: string) => {
+      try {
+        setFile(await api.file(g));
+        setLastSync(Date.now());
+      } catch (e: any) {
+        showError(e?.error?.message || "failed to load file");
+      }
+    },
+    [showError]
+  );
 
-  const loadHandover = useCallback(async (id: string) => {
-    try {
-      setHandover(await api.handover(id));
-    } catch (e: any) {
-      setError(e?.error?.message || "failed to load handover");
-    }
-  }, []);
+  const loadHandover = useCallback(
+    async (id: string) => {
+      try {
+        setHandover(await api.handover(id));
+      } catch (e: any) {
+        showError(e?.error?.message || "failed to load handover");
+      }
+    },
+    [showError]
+  );
+
+  // U8: cancel a stale Ask when a new one starts or the view changes.
+  const runAsk = useCallback(
+    async (groupId: string, q: string) => {
+      askAbort.current?.abort();
+      const ac = new AbortController();
+      askAbort.current = ac;
+      setBusy(true);
+      setAsk(null);
+      try {
+        setAsk(await api.ask(groupId, q, ac.signal));
+      } catch (e: any) {
+        if (e?.name !== "AbortError") showError(e?.error?.message || "ask failed");
+      } finally {
+        if (askAbort.current === ac) setBusy(false);
+      }
+    },
+    [showError]
+  );
+  useEffect(() => () => askAbort.current?.abort(), []);
+
+  usePolling(loadBoard, 15000, view === "board");
 
   useEffect(() => {
     if (!currentUser) return;
@@ -71,6 +167,9 @@ export default function App() {
 
   return (
     <div className="app">
+      <a href="#main" className="skip">
+        Skip to content
+      </a>
       <header>
         <div className="brand">
           <span className="mark">R</span>
@@ -109,16 +208,14 @@ export default function App() {
         </div>
       </header>
 
-      {error && (
-        <div className="banner error" onClick={() => setError("")}>
-          {error}
-        </div>
-      )}
+      <div className="synthetic-ribbon">Demo · all data synthetic · جميع البيانات تجريبية</div>
 
-      <main>
+      <main id="main">
         {view === "board" && (
           <Board
             board={board}
+            loading={boardLoading}
+            lastSync={lastSync}
             onOpen={(id) => {
               setHandover(null);
               setView("handover");
@@ -134,30 +231,22 @@ export default function App() {
             question={question}
             setQuestion={setQuestion}
             busy={busy}
-            onAsk={async () => {
-              setBusy(true);
-              setAsk(null);
-              try {
-                setAsk(await api.ask(file.group_id, question));
-              } catch (e: any) {
-                setError(e?.error?.message || "ask failed");
-              }
-              setBusy(false);
-            }}
+            onAsk={() => runAsk(file.group_id, question)}
             onOpenSource={setDrawer}
             onGroup={setGroup}
-            onError={setError}
+            onError={showError}
             reloadFile={() => loadFile(group)}
           />
         )}
         {view === "handover" && (
-          <HandoverView handover={handover} onReload={() => handover && loadHandover(handover.handover_id)} onError={setError} />
+          <HandoverView handover={handover} onReload={() => handover && loadHandover(handover.handover_id)} onError={showError} />
         )}
         {view === "agents" && <AgentsView />}
         {view === "evals" && <EvalsView />}
       </main>
 
       <SourceDrawer ev={drawer} onClose={() => setDrawer(null)} />
+      <Toasts items={toasts} dismiss={(id) => setToasts((t) => t.filter((x) => x.id !== id))} />
     </div>
   );
 }
@@ -195,7 +284,19 @@ function Login() {
   );
 }
 
-function Board({ board, onOpen, onReload }: { board: BoardItem[]; onOpen: (id: string) => void; onReload: () => void }) {
+function Board({
+  board,
+  loading,
+  lastSync,
+  onOpen,
+  onReload,
+}: {
+  board: BoardItem[];
+  loading: boolean;
+  lastSync: number;
+  onOpen: (id: string) => void;
+  onReload: () => void;
+}) {
   const [alerts, setAlerts] = useState<{ alert_id: string; kind: string; text: string; group_id: string | null }[]>([]);
   useEffect(() => {
     api.alerts().then((d) => setAlerts(d.alerts)).catch(() => {});
@@ -208,11 +309,16 @@ function Board({ board, onOpen, onReload }: { board: BoardItem[]; onOpen: (id: s
       <div className="row" style={{ justifyContent: "space-between" }}>
         <div>
           <h2>Readiness board</h2>
-          <p className="meta">A transfer closes only when every critical item is owned, dated and accepted.</p>
+          <p className="lead">
+            Every transfer, and exactly what is blocking it from closing.
+          </p>
         </div>
-        <button className="ghost" onClick={onReload}>
-          Refresh
-        </button>
+        <div className="row">
+          <Ago ts={lastSync} />
+          <button className="ghost" onClick={onReload}>
+            Refresh
+          </button>
+        </div>
       </div>
 
       <div className="stats">
@@ -236,7 +342,10 @@ function Board({ board, onOpen, onReload }: { board: BoardItem[]; onOpen: (id: s
 
       <div className="board-grid">
         <div className="cards">
-          {board.length === 0 && <p className="meta">No transfers. Start one via the API, or re-seed.</p>}
+          {loading && <SkeletonCards n={3} />}
+          {!loading && board.length === 0 && (
+            <p className="meta">No transfers. Start one via the API, or re-seed.</p>
+          )}
           {board.map((t) => (
             <div key={t.handover_id} className="card">
               <div className="status-line">
@@ -373,6 +482,12 @@ function FileView({
       <div className="row" style={{ justifyContent: "space-between" }}>
         <div>
           <h2>{file.group_name || file.group_id}</h2>
+          <p className="lead">
+            {T(
+              "Every fact links to its source. Nothing is marked approved without a record.",
+              "كل معلومة مرتبطة بمصدرها. لا شيء يُعتبر معتمداً دون سجل."
+            )}
+          </p>
           <p className="meta">
             {file.group_id} · {T("as of", "ب تاريخ")} {fmtDate(file.as_of)} ·{" "}
             {file.open_conflicts} {T("open conflict(s)", "تعارض مفتوح")}
@@ -406,18 +521,25 @@ function FileView({
         </button>
       </div>
       {ask && (
-        <div className={`answer ${ask.label}`}>
-          <div className="row">
+        <div className={`answer ${ask.label}`} role="status" aria-live="polite">
+          <div className="answer-head">
             <LabelChip label={ask.label} reasons={ask.reasons} ar={ar} />
-            <ConfidenceBand confidence={ask.confidence} />
+            <ConfidenceBand confidence={ask.confidence} reasons={ask.reasons} />
+            {ask.label === "not_in_records" && (
+              <span className="trust-flag">{T("Guarded answer", "إجابة محافِظة")}</span>
+            )}
           </div>
-          <p dir="auto">{ask.answer}</p>
-          <p className="meta">
-            {ask.reasons.join(" · ")}
-            {ask.citations.map((c, i) => (
-              <Citation key={i} ev={c} n={i + 1} onOpen={onOpenSource} />
-            ))}
+          <p className="answer-text" dir="auto">
+            {ask.answer}
           </p>
+          {ask.citations.length > 0 && (
+            <div className="answer-cites">
+              <span className="meta">{T("Based on", "استناداً إلى")}:</span>
+              {ask.citations.map((c, i) => (
+                <Citation key={i} ev={c} n={i + 1} onOpen={onOpenSource} />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -454,7 +576,7 @@ function FileView({
                   {f.due_date && <span className="meta"> · {T("due", "يستحق")} {fmtDate(f.due_date)}</span>}
                 </p>
                 <div className="fact-side">
-                  <ConfidenceBand confidence={f.confidence} />
+                  <ConfidenceBand confidence={f.confidence} reasons={f.reasons} />
                   <LabelChip label={f.label} reasons={f.reasons} ar={ar} />
                   {f.evidence.map((e, i) => (
                     <Citation key={i} ev={e} n={i + 1} onOpen={onOpenSource} />
@@ -486,6 +608,7 @@ function FileView({
       )}
 
       {tab === "commitments" && (
+        <div className="table-wrap">
         <table>
           <thead>
             <tr>
@@ -521,6 +644,7 @@ function FileView({
             )}
           </tbody>
         </table>
+        </div>
       )}
 
       {tab === "people" && (
@@ -542,7 +666,8 @@ function FileView({
                 </li>
               ))}
           </ul>
-          <table style={{ marginTop: 12 }}>
+          <div className="table-wrap" style={{ marginTop: 12 }}>
+          <table>
             <thead>
               <tr>
                 <th>{T("Legal entity", "الكيان القانوني")}</th>
@@ -560,6 +685,7 @@ function FileView({
               ))}
             </tbody>
           </table>
+          </div>
         </>
       )}
 
@@ -693,6 +819,7 @@ function HandoverView({
       <h3>
         <span className="step">2</span> Acceptance by the incoming RM
       </h3>
+      <div className="table-wrap">
       <table>
         <thead>
           <tr>
@@ -731,6 +858,7 @@ function HandoverView({
           ))}
         </tbody>
       </table>
+      </div>
       <div className="ask-panel">
         <input placeholder="Note for returned items…" value={note} onChange={(e) => setNote(e.target.value)} />
         <button
@@ -755,59 +883,76 @@ function HandoverView({
         accepted: {accepted} · returned: {returned}
       </p>
 
-      <h3>
-        <span className="step">3</span> Close transfer
-      </h3>
-      {blockers.length > 0 ? (
-        <div className="banner error">
-          <p style={{ margin: "2px 0 6px", fontWeight: 600 }}>Transfer cannot close yet — {blockers.length} blocker(s):</p>
-          {blockers.map((b, i) => (
-            <p key={i} style={{ margin: "3px 0" }}>
-              ⛔ {b.item_id ? (
-                <a href={`#item-${b.item_id}`} style={{ color: "inherit" }}>
-                  {b.reason}
-                </a>
-              ) : (
-                b.reason
-              )}
-            </p>
-          ))}
+      <div className="close-panel">
+        <div className="close-head">
+          <h3 style={{ margin: 0 }}>
+            <span className="step">3</span> Close transfer
+          </h3>
+          <span className={`state-pill ${handover.status === "closed" || blockers.length === 0 ? "ready" : "blocked"}`}>
+            {handover.status === "closed" ? "Closed" : blockers.length === 0 ? "Ready" : "Blocked"}
+          </span>
         </div>
-      ) : handover.status !== "closed" ? (
-        <p className="ok-text">✓ Readiness checks pass — the transfer can close.</p>
-      ) : null}
-      {closeMsg.length > 0 && (
-        <div className="banner error">
-          {closeMsg.map((m, i) => (
-            <p key={i} style={{ margin: "4px 0" }}>
-              ⛔ {m}
+
+        {blockers.length > 0 && (
+          <>
+            <p className="meta">
+              This transfer cannot close until every critical item has an owner, a date and no
+              unresolved conflict. Click a reason to jump to the item that resolves it.
             </p>
-          ))}
-        </div>
-      )}
-      <button
-        className="primary"
-        disabled={handover.status === "closed" || blockers.length > 0}
-        onClick={async () => {
-          setCloseMsg([]);
-          try {
-            await api.close(handover.handover_id);
-            onReload();
-          } catch (err: any) {
-            setCloseMsg(err?.error?.details?.blocking_reasons || [err?.error?.message || "close failed"]);
-            onReload();
-          }
-        }}
-      >
-        {handover.status === "closed" ? "Transfer closed" : "Close transfer"}
-      </button>
+            <ul className="block-reasons">
+              {blockers.map((b, i) => (
+                <li key={i}>
+                  <button
+                    className="reason-chip"
+                    onClick={() => b.item_id && scrollToItem(b.item_id)}
+                    disabled={!b.item_id}
+                  >
+                    <span className="fcode">{fcodeFor(b.reason)}</span>
+                    {b.reason}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+        {blockers.length === 0 && handover.status !== "closed" && (
+          <p className="ok-text">✓ Readiness checks pass — the transfer can close.</p>
+        )}
+        {closeMsg.length > 0 && (
+          <div className="banner error">
+            {closeMsg.map((m, i) => (
+              <p key={i} style={{ margin: "4px 0" }}>
+                ⛔ {m}
+              </p>
+            ))}
+          </div>
+        )}
+        <button
+          className="primary close-btn"
+          disabled={handover.status === "closed" || blockers.length > 0}
+          onClick={async () => {
+            setCloseMsg([]);
+            try {
+              await api.close(handover.handover_id);
+              onReload();
+            } catch (err: any) {
+              setCloseMsg(err?.error?.details?.blocking_reasons || [err?.error?.message || "close failed"]);
+              onReload();
+            }
+          }}
+          aria-disabled={handover.status === "closed" || blockers.length > 0}
+        >
+          {handover.status === "closed"
+            ? "Transfer closed"
+            : blockers.length > 0
+              ? "Resolve items to close"
+              : "Close transfer"}
+        </button>
+      </div>
     </section>
   );
 }
 
-function T2(s: string) {
-  return s;
-}
 function AgentsView() {
   type Overview = Awaited<ReturnType<typeof api.agentsOverview>>;
   const [data, setData] = useState<Overview | null>(null);
@@ -834,6 +979,10 @@ function AgentsView() {
       <div className="row" style={{ justifyContent: "space-between" }}>
         <div>
           <h2>Agentic workflow</h2>
+          <p className="lead">
+            The assistant prepares work on triggers — leave, expiry, handover — and a person always
+            acts.
+          </p>
           <p className="meta">{data.pattern} · as of {data.as_of}</p>
         </div>
       </div>

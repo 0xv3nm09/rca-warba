@@ -120,7 +120,7 @@ export function clearAuth() {
   localStorage.removeItem("rca_group");
 }
 
-async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+async function call<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
   const res = await fetch(API + path, {
     method,
     headers: {
@@ -128,9 +128,18 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: body ? JSON.stringify(body) : undefined,
+    signal,
   });
-  const data = await res.json();
-  if (!res.ok) throw { status: res.status, ...data };
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    // Expired/invalid session: back to login instead of dead-end errors.
+    if (res.status === 401) {
+      clearAuth();
+      location.reload();
+      throw { status: 401, error: { message: "Session expired" } };
+    }
+    throw { status: res.status, ...data };
+  }
   return data as T;
 }
 
@@ -139,8 +148,8 @@ export const api = {
     call<{ session_token: string }>("POST", "/auth/dev-login", { user, group }),
   board: () => call<{ transfers: BoardItem[] }>("GET", "/handovers"),
   file: (groupId: string) => call<ClientFile>("GET", `/groups/${groupId}/file`),
-  ask: (groupId: string, question: string) =>
-    call<AskResult>("POST", `/groups/${groupId}/ask`, { question, lang: "en" }),
+  ask: (groupId: string, question: string, signal?: AbortSignal) =>
+    call<AskResult>("POST", `/groups/${groupId}/ask`, { question, lang: "en" }, signal),
   handover: (id: string) => call<HandoverDetail>("GET", `/handovers/${id}`),
   questions: (id: string) =>
     call<{ questions: { question_id: string; text: string; why_asked: string; failure_point: string }[] }>(

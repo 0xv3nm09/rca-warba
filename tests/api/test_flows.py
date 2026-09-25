@@ -1,46 +1,9 @@
-"""API-level tests for the walkthrough flows (synthetic data only)."""
+"""API-level tests for the walkthrough flows (synthetic data only).
 
-import os
+Shared fixtures (client, fresh seed) and helpers live in tests/api/conftest.py.
+"""
 
-import pytest
-from httpx import ASGITransport, AsyncClient
-
-os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://rca:rca@localhost:5433/rca")
-
-from rca.app.main import app  # noqa: E402
-from rca.db.session import create_all, make_engine, make_sessionmaker  # noqa: E402
-
-
-@pytest.fixture
-async def client():
-    engine = make_engine()
-    await create_all(engine)
-    app.state.engine = engine
-    app.state.sessionmaker = make_sessionmaker(engine)
-    from rca.ai.gateway import ModelGateway
-
-    app.state.gateway = ModelGateway()
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://t") as c:
-        yield c
-    await engine.dispose()
-
-
-@pytest.fixture(autouse=True)
-async def fresh_seed(client):
-    """Each test gets pristine synthetic state (fast: rules extractor, no network)."""
-    from rca.adapters.dummy.seed import main as seed_main
-
-    await seed_main()
-
-
-async def token_for(client, user, group=None, **_):
-    r = await client.post("/auth/dev-login", json={"user": user, "group": group})
-    assert r.status_code == 200, r.text
-    return r.json()["session_token"]
-
-
-H = lambda t: {"Authorization": f"Bearer {t}"}  # noqa: E731
+from conftest import H, token_for
 
 
 async def seeded_ids(client):

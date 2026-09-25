@@ -24,6 +24,10 @@ class Forbidden(DomainError):
     code, status = "forbidden", 403
 
 
+class Unauthorized(DomainError):
+    code, status = "unauthorized", 401
+
+
 class OutOfScope(DomainError):
     code, status = "out_of_scope", 403
 

@@ -1,6 +1,6 @@
 from fastapi import Depends, Header, Path, Request
 
-from rca.app.errors import Forbidden, OutOfScope
+from rca.app.errors import Forbidden, OutOfScope, Unauthorized
 from rca.security.sessions import Session, verify
 
 
@@ -19,7 +19,7 @@ async def current_session(authorization: str = Header(...)) -> Session:
     try:
         return verify(authorization.removeprefix("Bearer "))
     except Exception as exc:
-        raise Forbidden("Invalid or expired session") from exc
+        raise Unauthorized("Invalid or expired session") from exc
 
 
 def group_scope(group_id: str = Path(...), s: Session = Depends(current_session)) -> Session:
