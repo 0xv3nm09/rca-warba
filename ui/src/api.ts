@@ -233,6 +233,12 @@ export const api = {
       }[];
       audit_tail: { seq: number; ts: string; actor: string; action: string; subject: string }[];
     }>("GET", "/agents/overview"),
+  referral: (groupId: string, question: string, toRole: string) =>
+    call<{ pack: { doc_id: string; decision_needed_by: string } }>("POST", "/agents/referrals", {
+      group_id: groupId,
+      question,
+      to_role: toRole,
+    }),
   handoverLink: (groupId: string) =>
     call<{ handover_id: string | null; items: { item_id: string; kind: string; ref_id: string | null; status: string }[] }>(
       "GET",

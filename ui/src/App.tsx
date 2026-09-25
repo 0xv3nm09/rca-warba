@@ -90,11 +90,12 @@ export default function App() {
   const [question, setQuestion] = useState("");
   const [toasts, setToasts] = useState<{ id: number; text: string; kind: string }[]>([]);
   const toastId = useRef(0);
-  const showError = useCallback((text: string) => {
+  const showToast = useCallback((text: string, kind = "error") => {
     const id = ++toastId.current;
-    setToasts((t) => [...t, { id, text, kind: "error" }]);
+    setToasts((t) => [...t, { id, text, kind }]);
     window.setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 6000);
   }, []);
+  const showError = useCallback((text: string) => showToast(text, "error"), [showToast]);
   const [intro, setIntro] = useState(!localStorage.getItem("rca_intro_done"));
   const [boardLoading, setBoardLoading] = useState(true);
   const [lastSync, setLastSync] = useState<number>(Date.now());
@@ -300,7 +301,9 @@ export default function App() {
             onOpenSource={setDrawer}
             onGroup={setGroup}
             onError={showError}
+            notify={(t) => showToast(t, "ok")}
             reloadFile={() => loadFile(group)}
+            onOpenAgents={() => setView("agents")}
             onOpenHandover={(id) => {
               setView("handover");
               loadHandover(id);
@@ -469,6 +472,7 @@ function Board({
               ) : (
                 <p className="ok-text">✓ Ready to close</p>
               )}
+              {yourPart(currentUser, t) && <p className="your-part">Your part: {yourPart(currentUser, t)}</p>}
               <div className="foot">
                 <span className="meta">
                   {t.open_items} open · next due {fmtDate(t.next_due)}
@@ -516,8 +520,10 @@ function FileView({
   onOpenSource,
   onGroup,
   onError,
+  notify,
   reloadFile,
   onOpenHandover,
+  onOpenAgents,
 }: {
   file: ClientFile;
   ask: AskResult | null;
@@ -528,12 +534,18 @@ function FileView({
   onOpenSource: (e: Evidence) => void;
   onGroup: (g: string) => void;
   onError: (s: string) => void;
+  notify: (s: string) => void;
   reloadFile: () => void;
   onOpenHandover: (id: string) => void;
+  onOpenAgents: () => void;
 }) {
   const [tab, setTab] = useState<"brief" | "timeline" | "commitments" | "people" | "sources">("brief");
   const [ar, setAr] = useState(false);
   const [link, setLink] = useState<{ handover_id: string | null; items: { item_id: string; kind: string; ref_id: string | null; status: string }[] }>({ handover_id: null, items: [] });
+  const [refOpen, setRefOpen] = useState(false);
+  const [refQuestion, setRefQuestion] = useState("");
+  const [refRole, setRefRole] = useState("trade_specialist");
+  const [refDone, setRefDone] = useState(false);
   const groups = allowedGroups();
   const canAssign = currentUser === "lead.one";
 
@@ -723,6 +735,56 @@ function FileView({
           </button>
         </div>
       )}
+
+      <div className="ref-row">
+        {!refOpen ? (
+          <button className="ghost" onClick={() => setRefOpen(true)}>
+            {T("Refer to a specialist", "إحالة إلى مختص")}
+          </button>
+        ) : (
+          <div className="ref-form">
+            <select value={refRole} onChange={(e) => setRefRole(e.target.value)} aria-label="Specialist role">
+              <option value="trade_specialist">{T("Trade specialist", "مختص تجارة")}</option>
+              <option value="credit_officer">{T("Credit officer", "مسؤول ائتمان")}</option>
+            </select>
+            <input
+              placeholder={T(
+                "What should the specialist confirm? e.g. documents required to renew G-2291",
+                "ما الذي يجب أن يؤكده المختص؟"
+              )}
+              value={refQuestion}
+              onChange={(e) => setRefQuestion(e.target.value)}
+            />
+            <button
+              disabled={refQuestion.trim().length < 8}
+              onClick={async () => {
+                try {
+                  await api.referral(file.group_id, refQuestion.trim(), refRole);
+                  setRefOpen(false);
+                  setRefDone(true);
+                  setRefQuestion("");
+                  notify(T("Referral pack assembled — the specialist has everything on file.", "تم إعداد حزمة الإحالة."));
+                } catch (e: any) {
+                  onError(e?.error?.message || "referral failed");
+                }
+              }}
+            >
+              {T("Assemble pack", "إعداد الحزمة")}
+            </button>
+            <button className="ghost" onClick={() => setRefOpen(false)}>
+              {T("Cancel", "إلغاء")}
+            </button>
+          </div>
+        )}
+        {refDone && (
+          <span className="next-nudge" style={{ margin: 0 }}>
+            {T("Referral pack ready —", "الحزمة جاهزة —")}{" "}
+            <button className="link" onClick={onOpenAgents}>
+              {T("open it on the Agents screen →", "افتحها على شاشة الوكلاء ←")}
+            </button>
+          </span>
+        )}
+      </div>
 
       <nav className="tabs">
         {TABS.map((t) => (
@@ -1053,6 +1115,16 @@ function FileView({
     </section>
   );
 }
+/** The handover is a transfer between named people - say whose turn it is. */
+function yourPart(user: string, h: { from_rm: string; to_rm: string; status: string }): string | null {
+  if (h.status !== "open") return null;
+  if (user === h.from_rm)
+    return "answer the outgoing gap questions — your answers are saved as recollection, never as fact";
+  if (user === h.to_rm) return "review the duties and accept or return them";
+  if (user === "lead.one") return "clear the exceptions: assign owners, then close the transfer";
+  return null;
+}
+
 function plainBlock(reasons: string[]): string {
   const owner = reasons.filter((r) => /owner/i.test(r)).length;
   const conflict = reasons.filter((r) => /conflict/i.test(r)).length;
@@ -1118,6 +1190,11 @@ function HandoverView({
           {handover.ready ? "ready to close" : `${handover.blocking.length} blocker(s)`}
         </span>
       </div>
+      {yourPart(currentUser, handover) && (
+        <div className="role-part">
+          <strong>Your part:</strong> {yourPart(currentUser, handover)}
+        </div>
+      )}
       {!handover.ready && handover.blocking.length > 0 && (
         <div className="why-blocked">
           <strong>Why this can't close yet:</strong>{" "}

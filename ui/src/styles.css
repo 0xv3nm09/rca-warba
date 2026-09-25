@@ -656,3 +656,21 @@ tr.row-urgent td { background: #fff8f8; }
 body.demo-mode main { padding-inline-end: 300px; }
 @media (max-width: 1100px) { body.demo-mode main { padding-inline-end: 28px; } }
 .tree-node.child > div:last-child { display: flex; flex-direction: column; gap: 1px; }
+
+/* ---- end-to-end workflow additions ---- */
+.your-part { font-size: 13px; color: var(--info-700); font-weight: 550; margin: 4px 0 0; }
+.role-part {
+  background: var(--info-100); border: 1px solid #c4d7f6; color: var(--info-700);
+  border-radius: 10px; padding: 10px 14px; font-size: 13.5px; margin-bottom: 14px;
+}
+.role-part strong { color: var(--info-700); }
+.ref-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 4px 0 10px; }
+.ref-form { display: flex; gap: 8px; flex-wrap: wrap; flex: 1; }
+.ref-form select { padding: 9px 10px; border-radius: 8px; border: 1px solid var(--line-2); }
+.ref-form input { flex: 1; min-width: 240px; padding: 9px 12px; border: 1px solid var(--line-2); border-radius: 8px; font-family: var(--font); }
+.ref-form button {
+  background: var(--navy-900); color: #fff; border: 0; border-radius: 8px;
+  padding: 9px 16px; cursor: pointer; font-family: var(--font);
+}
+.ref-form button.ghost { background: transparent; color: var(--ink-2); border: 1px solid var(--line-2); }
+.toast.ok { background: var(--ok-700); }
