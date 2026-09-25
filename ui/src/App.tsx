@@ -1663,6 +1663,7 @@ const FAILURE_MODES = [
   },
   {
     id: null,
+    proof: "pilot",
     name: "People trust AI too much",
     real: "A 2025 review of 35 studies: explanations alone rarely reduce automation bias",
     control: "Material facts need an explicit check with the source open; the pilot seeds known errors to measure catch rate",
@@ -1671,6 +1672,7 @@ const FAILURE_MODES = [
   },
   {
     id: null,
+    proof: "gate",
     name: "Overconfident self-scores",
     real: "Models asked for confidence tend to be overconfident",
     control: "Confidence is computed from checks (span, numbers, entailment) and calibrated; shown as plain labels",
@@ -1679,6 +1681,7 @@ const FAILURE_MODES = [
   },
   {
     id: null,
+    proof: "pilot",
     name: "Pilots that never pay back",
     real: "MIT NANDA: 95% of generative AI pilots stall, mostly poor workflow integration",
     control: "One pain point, measured baseline, go/no-go at week 8, stop if savings don't cover cost",
@@ -1687,6 +1690,7 @@ const FAILURE_MODES = [
   },
   {
     id: null,
+    proof: "gate",
     name: "Weaker quality in Arabic",
     real: "Models tested in Arabic default to Western cultural associations",
     control: "Bilingual golden set; Arabic–English quality gap under 3 points as a release gate",
@@ -1836,8 +1840,20 @@ function EvalsView() {
                       ) : (
                         <span className="meta">not run</span>
                       )
+                    ) : fm.proof === "gate" ? (
+                      <span
+                        className="chip verified"
+                        title="Enforced automatically: the golden-suite run fails the release if this number is missed (make eval)."
+                      >
+                        release gate
+                      </span>
                     ) : (
-                      <span className="meta">gate / pilot</span>
+                      <span
+                        className="chip review"
+                        title="Not provable in software alone — a human measure taken during the 8-week pilot (proposal section 13)."
+                      >
+                        pilot measure
+                      </span>
                     )}
                     {lc && <p className="meta" style={{ margin: 0 }}>{lc.detail}</p>}
                   </td>
@@ -1847,6 +1863,12 @@ function EvalsView() {
           </tbody>
         </table>
       </div>
+      <p className="meta" style={{ marginTop: 10 }}>
+        <span className="chip verified">release gate</span> enforced automatically on every
+        evaluation run · <span className="chip review">pilot measure</span> a human measure for
+        the 8-week pilot — software alone cannot prove it · live checks run on this instance,
+        non-destructively.
+      </p>
     </section>
   );
 }
