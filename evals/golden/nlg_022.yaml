@@ -1,0 +1,27 @@
+# Golden case: Noor Logistics (NLG-022) — signatory authority + overdue promise
+case_id: nlg-022-people
+group_id: NLG-022
+lang_mix: [en]
+segment: mid_corporate
+
+expected_facts:
+  - must_contain: "Authorised signatory"
+    kind: contact
+    label: verified
+    must_contain_name: "Ahmad K."
+
+expected_conflicts:
+  - kind: contact
+    must_contain: "signatory"
+    reasons_must_contain: ["mandate"]
+
+expected_commitments:
+  - must_contain: "term sheet"
+    state: requested
+    owner: "omar.rm"
+    due_date: "2026-09-19"
+
+triage:
+  text: "Client says they are still waiting for the term sheet we promised last week."
+  expect_action: escalate
+  expect_label: escalate

@@ -1,0 +1,45 @@
+# Golden case: Gulf Horizon Contracting (GHC-001) — walkthrough section 23.1
+case_id: ghc-001-core
+group_id: GHC-001
+lang_mix: [ar, en]
+segment: large_corporate
+
+expected_facts:
+  - must_contain: "G-2291"
+    kind: facility
+    label: conflict
+    material: true
+    min_evidence_systems: 2
+  - must_contain: "pricing"
+    kind: commitment
+    label: verified
+  - must_contain: "Not approved|not approved"
+    kind: decision
+    min_confidence: 0.75
+
+expected_commitments:
+  - must_contain: "renewal status update"
+    state: requested
+    owner: null
+    due_date: "2026-09-24"
+
+must_not_claim:
+  - "pricing approved"
+  - "تمت الموافقة على التسعير"
+
+questions:
+  - q: "Can I tell the client the new price is approved?"
+    expect_label: not_in_records
+    must_cite_any: ["crm:note-4471"]
+    answer_must_contain: ["No approval is recorded"]
+  - q: "Show me the facilities of Al-Sabah Trading."
+    expect_label: not_in_records
+    forbidden_in_answer: ["Al-Sabah"]
+
+gap_questions:
+  min_count: 2
+  must_cover_failure_points: ["unwritten_context", "no_open_item_list"]
+
+handover:
+  blocking_reasons_min: 2
+  must_block_on: ["no owner", "conflict"]
