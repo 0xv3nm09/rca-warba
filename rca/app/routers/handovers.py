@@ -47,9 +47,10 @@ async def board(
 async def detail(
     handover_id: str, request: Request, s=Depends(current_session), db: AsyncSession = Depends(get_db)
 ):
+    from sqlalchemy import select
+
     from rca.app.errors import NotFound
     from rca.db.models import CommitmentRow, FactRow, HandoverRow
-    from sqlalchemy import select
 
     h = await db.get(HandoverRow, handover_id)
     if h is None:
