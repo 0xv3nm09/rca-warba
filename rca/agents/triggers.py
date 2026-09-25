@@ -255,9 +255,7 @@ async def alert_statuses(db, today_: date) -> dict[str, str]:
             fid = a.raised_once_key.split(":", 1)[-1]
             facility = next((x for x in facts if x.kind == "facility" and fid in x.text), None)
             owned = facility is not None and any(
-                c.entity_id == facility.entity_id
-                and c.owner
-                and c.state not in {"closed", "withdrawn"}
+                c.entity_id == facility.entity_id and c.owner and c.state not in {"closed", "withdrawn"}
                 for c in comms
                 if c.group_id == facility.group_id
             )

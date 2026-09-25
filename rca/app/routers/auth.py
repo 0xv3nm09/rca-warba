@@ -21,9 +21,7 @@ async def dev_login(body: DevLoginRequest, request: Request):
         if not d.allow:
             raise Forbidden(f"Access denied: {d.reason}")
     token = sessions.issue(body.user, roles, body.group, "view_file")
-    allowed = (
-        policy.ALL_GROUPS if "team_lead" in roles else sorted(policy.COVERAGE.get(body.user, set()))
-    )
+    allowed = policy.ALL_GROUPS if "team_lead" in roles else sorted(policy.COVERAGE.get(body.user, set()))
     return TokenResponse(
         request_id=request.state.request_id,
         session_token=token,

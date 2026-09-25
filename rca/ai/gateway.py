@@ -116,11 +116,18 @@ class ModelGateway:
         ):
             with attempt:
                 async with self.sem[route_name]:
+                    extra = {}
+                    if "gpt-oss" in route.model:
+                        # Reasoning models burn hidden thinking tokens against
+                        # tight per-minute budgets; low effort keeps drafting
+                        # (our verified-evidence sentences) fast and cheap.
+                        extra["extra_body"] = {"reasoning_effort": "low"}
                     resp = await client.chat.completions.create(
                         model=route.model,
                         messages=messages,
                         temperature=temperature,
                         response_format={"type": "json_object"},
+                        **extra,
                     )
         return _strip_think(resp.choices[0].message.content or "")
 
