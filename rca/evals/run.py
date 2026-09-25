@@ -88,45 +88,67 @@ async def run_case(client, base, case) -> dict:
             ok = cand[0]["owner"] == want["owner"]
         if ok and "due_date" in want:
             ok = str(cand[0]["due_date"]) == want["due_date"]
-        check(f"commitment:{want['must_contain']}", ok, json.dumps(cand[0]["description"] if cand else "MISSING")[:120])
+        check(
+            f"commitment:{want['must_contain']}",
+            ok,
+            json.dumps(cand[0]["description"] if cand else "MISSING")[:120],
+        )
 
     for want in case.get("expected_conflicts", []):
-        cand = [f for f in facts if f["label"] == "conflict" and re.search(want["must_contain"], f["text"], re.I)]
+        cand = [
+            f for f in facts if f["label"] == "conflict" and re.search(want["must_contain"], f["text"], re.I)
+        ]
         ok = bool(cand) and any(
-            p.lower() in " | ".join(cand[0].get("reasons", [])).lower() for p in want.get("reasons_must_contain", [])
+            p.lower() in " | ".join(cand[0].get("reasons", [])).lower()
+            for p in want.get("reasons_must_contain", [])
         )
         check(f"conflict:{want['must_contain']}", ok)
 
     # 2. must_not_claim across every fact and answer
     answers = {}
     for q in case.get("questions", []):
-        rq = await client.post(f"{base}/groups/{case['group_id']}/ask", headers=H,
-                               json={"question": q["q"], "lang": "en"})
+        rq = await client.post(
+            f"{base}/groups/{case['group_id']}/ask", headers=H, json={"question": q["q"], "lang": "en"}
+        )
         if q.get("expect_status"):
-            check(f"question blocked:{q['q'][:40]}", rq.status_code == q["expect_status"]
-                  and rq.json().get("error", {}).get("code") == q.get("expect_error"))
+            check(
+                f"question blocked:{q['q'][:40]}",
+                rq.status_code == q["expect_status"]
+                and rq.json().get("error", {}).get("code") == q.get("expect_error"),
+            )
             continue
         body = rq.json()
         answers[q["q"]] = body
         if "expect_label" in q:
             check(f"label:{q['q'][:40]}", body["label"] == q["expect_label"], body["label"])
         if "must_cite_any" in q:
-            check(f"citations:{q['q'][:40]}",
-                  any(c["record_id"] in q["must_cite_any"] for c in body["citations"]),
-                  str([c["record_id"] for c in body["citations"]]))
+            check(
+                f"citations:{q['q'][:40]}",
+                any(c["record_id"] in q["must_cite_any"] for c in body["citations"]),
+                str([c["record_id"] for c in body["citations"]]),
+            )
         if "answer_must_contain" in q:
-            check(f"answer content:{q['q'][:40]}",
-                  all(p.lower() in body["answer"].lower() for p in q["answer_must_contain"]))
+            check(
+                f"answer content:{q['q'][:40]}",
+                all(p.lower() in body["answer"].lower() for p in q["answer_must_contain"]),
+            )
         if "forbidden_in_answer" in q:
-            check(f"forbidden absent:{q['q'][:40]}",
-                  not any(p.lower() in body["answer"].lower() for p in q["forbidden_in_answer"]))
+            check(
+                f"forbidden absent:{q['q'][:40]}",
+                not any(p.lower() in body["answer"].lower() for p in q["forbidden_in_answer"]),
+            )
 
     # Scan only what the user sees (fact texts + answer texts), not the raw JSON:
     # question echoes and negating reasons must not trip the ban.
     visible = [f["text"] for f in facts] + [a["answer"] for a in answers.values()]
     for banned in case.get("must_not_claim", []):
         bl = banned.lower()
-        hits = [t for t in visible if bl in t.lower() and "not" not in t.lower()[max(0, t.lower().find(bl) - 40):t.lower().find(bl) + len(bl) + 40]]
+        lo = [t.lower() for t in visible]
+        hits = [
+            t
+            for t, low in zip(visible, lo, strict=False)
+            if bl in low and "not" not in low[max(0, low.find(bl) - 40) : low.find(bl) + len(bl) + 40]
+        ]
         check(f"must_not_claim:{banned[:40]}", not hits, f"banned phrase {banned!r} appears in {hits[:1]}")
 
     # 3. Gap questions
@@ -136,8 +158,9 @@ async def run_case(client, base, case) -> dict:
         if transfers:
             hov = transfers[0]["handover_id"]
             t_omar = await login(client, base, "omar.rm", case["group_id"])
-            r = await client.get(f"{base}/handovers/{hov}/questions",
-                                 headers={"Authorization": f"Bearer {t_omar}"})
+            r = await client.get(
+                f"{base}/handovers/{hov}/questions", headers={"Authorization": f"Bearer {t_omar}"}
+            )
             qs = r.json()["questions"]
             fps = {q["failure_point"] for q in qs}
             check("gap_question_count", len(qs) >= case["gap_questions"]["min_count"], str(len(qs)))
@@ -145,16 +168,22 @@ async def run_case(client, base, case) -> dict:
                 check(f"gap_covers:{fp}", fp in fps)
             # handover blocking
             t_lead = await login(client, base, "lead.one")
-            r = await client.post(f"{base}/handovers/{hov}/close",
-                                  headers={"Authorization": f"Bearer {t_lead}"})
+            r = await client.post(
+                f"{base}/handovers/{hov}/close", headers={"Authorization": f"Bearer {t_lead}"}
+            )
             reasons = r.json().get("error", {}).get("details", {}).get("blocking_reasons", [])
-            check("close_blocked", r.status_code == 409 and len(reasons) >= case["handover"]["blocking_reasons_min"])
+            check(
+                "close_blocked",
+                r.status_code == 409 and len(reasons) >= case["handover"]["blocking_reasons_min"],
+            )
             for must in case["handover"]["must_block_on"]:
                 check(f"blocks_on:{must}", any(must in x for x in reasons))
 
     # 4. Triage
     if "triage" in case:
-        r = await client.post(f"{base}/triage", headers=H, json={"text": case["triage"]["text"], "lang": "en"})
+        r = await client.post(
+            f"{base}/triage", headers=H, json={"text": case["triage"]["text"], "lang": "en"}
+        )
         body = r.json()
         check("triage_action", body["action"] == case["triage"]["expect_action"], body["action"])
         check("triage_label", body["label"] == case["triage"]["expect_label"], body["label"])
@@ -166,7 +195,9 @@ def compute_gates(cases: list[dict]) -> dict:
     total = sum(len(c["checks"]) for c in cases)
     passed = sum(1 for c in cases for k in c["checks"] if k["ok"])
     numeric_checks = [k for c in cases for k in c["checks"] if k["name"].startswith(("commitment:", "fact:"))]
-    numeric_exact = (sum(1 for k in numeric_checks if k["ok"]) / len(numeric_checks)) if numeric_checks else 1.0
+    numeric_exact = (
+        (sum(1 for k in numeric_checks if k["ok"]) / len(numeric_checks)) if numeric_checks else 1.0
+    )
     return {
         "checks_passed": passed,
         "checks_total": total,
