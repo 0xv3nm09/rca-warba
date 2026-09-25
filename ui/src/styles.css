@@ -516,3 +516,84 @@ main { max-width: 1200px; margin: 0 auto; }
 }
 .toast.error { background: var(--bad-700); }
 @keyframes rise { from { transform: translateY(6px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* ================= Narrative layer (RCA_UX_Narrative.md) ================= */
+
+/* ---- N1: first-run explainer ---- */
+.intro-backdrop {
+  position: fixed; inset: 0; background: rgba(11, 31, 58, 0.55);
+  display: grid; place-items: center; z-index: 80; padding: 20px;
+  backdrop-filter: blur(2px);
+}
+.intro {
+  background: var(--card); border-radius: 16px; padding: 26px 28px;
+  max-width: 460px; box-shadow: var(--shadow); animation: rise 0.2s ease;
+}
+.intro-kicker {
+  font-size: 12px; font-weight: 700; letter-spacing: 0.6px;
+  text-transform: uppercase; color: var(--gold-600);
+}
+.intro h2 { margin: 6px 0 8px; font-size: 20px; }
+.intro p { color: var(--ink-2); line-height: 1.6; margin: 0 0 18px; }
+.intro-dots { display: flex; gap: 6px; margin-bottom: 18px; }
+.intro-dots span { width: 22px; height: 4px; border-radius: 2px; background: var(--line-2); }
+.intro-dots span.on { background: var(--gold-500); }
+.intro-actions { display: flex; justify-content: space-between; }
+
+/* ---- N2: context strip ---- */
+.context-strip {
+  display: flex; align-items: center; gap: 9px; font-size: 13px; color: var(--ink-2);
+  background: var(--navy-100); padding: 8px 28px; border-bottom: 1px solid var(--line);
+}
+.context-strip .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--gold-500); flex-shrink: 0; }
+@media (max-width: 900px) { .context-strip { padding-inline: 16px; } }
+
+/* ---- N3: assembled note ---- */
+.assembled-note {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  background: var(--ok-100); color: var(--ink-2); border: 1px solid #bfe6d2;
+  border-radius: 10px; padding: 9px 13px; font-size: 13px; margin: 6px 0 12px;
+}
+.assembled-note .pull { font-weight: 700; color: var(--ok-700); }
+
+/* ---- N4: progress rail + plain why-blocked ---- */
+.progress { display: flex; align-items: center; gap: 12px; margin: 6px 0 12px; }
+.progress-bar {
+  flex: 1; height: 8px; background: var(--line); border-radius: 999px;
+  overflow: hidden; max-width: 340px;
+}
+.progress-bar span {
+  display: block; height: 100%;
+  background: linear-gradient(90deg, var(--gold-500), var(--gold-600));
+  transition: width 0.3s ease;
+}
+.why-blocked {
+  background: var(--bad-100); border: 1px solid #f0c4cc; color: var(--bad-700);
+  border-radius: 10px; padding: 10px 14px; font-size: 13.5px; margin-bottom: 14px;
+}
+.why-blocked strong { color: var(--bad-700); }
+
+/* ---- N5: next-step nudge ---- */
+.next-nudge { margin-top: 4px; margin-bottom: 12px; font-size: 13.5px; color: var(--ink-2); }
+.link {
+  border: 0; background: none; color: var(--info-700); font: inherit;
+  cursor: pointer; padding: 0; text-decoration: underline;
+}
+
+/* ---- Demo rail ---- */
+.demo-rail {
+  position: fixed; inset-inline-end: 16px; inset-block-start: 96px; z-index: 55;
+  width: 250px; background: var(--card); border: 1px solid var(--line);
+  border-radius: 12px; padding: 12px; box-shadow: var(--shadow);
+}
+.demo-title {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.5px;
+  text-transform: uppercase; color: var(--gold-600); margin-bottom: 8px;
+}
+.demo-rail button {
+  display: block; width: 100%; text-align: start; border: 0; background: transparent;
+  color: var(--ink); font-size: 12.5px; padding: 7px 9px; border-radius: 8px; cursor: pointer;
+  font-family: var(--font);
+}
+.demo-rail button:hover { background: var(--navy-100); }
+@media (max-width: 1100px) { .demo-rail { display: none; } }

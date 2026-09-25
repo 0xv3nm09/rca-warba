@@ -48,6 +48,10 @@ class GuardrailBlocked(DomainError):
     code, status = "guardrail_blocked", 422
 
 
+class ValidationFailed(DomainError):
+    code, status = "validation_failed", 422
+
+
 class RateLimited(DomainError):
     code, status = "rate_limited", 429
 

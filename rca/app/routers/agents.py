@@ -69,7 +69,6 @@ TRIGGERS = [
         "effect": "Question, documents held, history — no re-asking",
         "human_step": "Specialist accepts the task",
         "use_case": 5,
-        "prototype": "not_built",
     },
 ]
 
@@ -117,7 +116,18 @@ async def overview(s=Depends(current_session), db: AsyncSession = Depends(get_db
                 "output": (h.id if h else None),
                 "when": h.created_at.isoformat() if h else None,
             }
-        kind = {"expiry_no_owner": "expiry_no_owner", "promise_overdue": "promise_overdue"}[trig["trigger"]]
+        kind = {
+            "expiry_no_owner": "expiry_no_owner",
+            "promise_overdue": "promise_overdue",
+            "referral_requested": "referral_pack",
+        }[trig["trigger"]]
+        if trig["trigger"] == "referral_requested":
+            hit = next((d for d in docs if d.kind == "referral_pack"), None)
+            return {
+                "status": "fired" if hit else "waiting",
+                "output": (hit.payload.get("question", "") if hit else None),
+                "when": (hit.created_at.isoformat() if hit else None),
+            }
         hit = next((a for a in alerts if a.kind == kind), None)
         return {
             "status": "fired" if hit else "waiting",
@@ -137,6 +147,15 @@ async def overview(s=Depends(current_session), db: AsyncSession = Depends(get_db
         if d.kind == "cover_brief"
     ]
 
+    referrals = [
+        {
+            "doc_id": d.id,
+            **{k: v for k, v in d.payload.items()},
+        }
+        for d in docs
+        if d.kind == "referral_pack"
+    ]
+
     audit_tail = list(
         (await db.execute(select(AuditEvent).order_by(AuditEvent.seq.desc()).limit(8))).scalars()
     )
@@ -147,6 +166,7 @@ async def overview(s=Depends(current_session), db: AsyncSession = Depends(get_db
         "principles": PRINCIPLES,
         "triggers": triggers,
         "cover_briefs": briefs,
+        "referral_packs": referrals,
         "alerts": [
             {"alert_id": a.id, "kind": a.kind, "group_id": a.group_id, "text": a.text, "to_role": a.to_role}
             for a in alerts
@@ -157,3 +177,28 @@ async def overview(s=Depends(current_session), db: AsyncSession = Depends(get_db
         ],
         "coverage": {u: sorted(gs) for u, gs in COVERAGE.items()},
     }
+
+
+@router.post("/referrals", status_code=201)
+async def create_referral(body: dict, s=Depends(current_session), db: AsyncSession = Depends(get_db)):
+    """RM requests a specialist referral; the agent assembles the pack (use case 5)."""
+    import uuid
+
+    from rca.agents.triggers import prepare_referral_pack
+    from rca.app.errors import OutOfScope, ValidationFailed
+
+    group_id = body.get("group_id", "")
+    question = (body.get("question") or "").strip()
+    if not group_id or len(question) < 8:
+        raise ValidationFailed("group_id and a question (min 8 chars) are required")
+    if s.group_id != group_id and "team_lead" not in s.roles:
+        raise OutOfScope("Session is not bound to this client group")
+    pack = await prepare_referral_pack(
+        db,
+        group_id=group_id,
+        question=question,
+        to_role=body.get("to_role", "trade_specialist"),
+        requested_by=s.user_id,
+        today_=today(),
+    )
+    return {"request_id": f"req_{uuid.uuid4().hex[:16]}", "pack": pack}

@@ -23,6 +23,8 @@ import {
   SourceDrawer,
   Toasts,
 } from "./components";
+import { DemoRail } from "./DemoRail";
+import { Intro } from "./Intro";
 
 type View = "board" | "file" | "handover" | "agents" | "evals";
 
@@ -92,6 +94,7 @@ export default function App() {
     setToasts((t) => [...t, { id, text, kind: "error" }]);
     window.setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 6000);
   }, []);
+  const [intro, setIntro] = useState(!localStorage.getItem("rca_intro_done"));
   const [boardLoading, setBoardLoading] = useState(true);
   const [lastSync, setLastSync] = useState<number>(Date.now());
   const [busy, setBusy] = useState(false);
@@ -161,7 +164,63 @@ export default function App() {
     if (view === "handover" && handover) loadHandover(handover.handover_id);
   }, [view, group, loadBoard, loadFile, loadHandover, handover]);
 
-  if (!currentUser) return <Login />;
+  const isDemo = new URLSearchParams(location.search).get("demo") === "1";
+
+  // N5 + demo beats: navigate programmatically from the rail / nudges.
+  const goTo = useCallback(
+    (target: string) => {
+      const [v, g] = target.split(":");
+      if (v === "file" && g) {
+        setGroup(g);
+        setView("file");
+        loadFile(g);
+        return;
+      }
+      if (v === "cite" || v === "conflict" || v === "ask") {
+        // beats 3-5 land on the GHC file; the reviewer performs the interaction
+        setView("file");
+        if (!file) loadFile(group);
+        return;
+      }
+      if (v === "handover") {
+        if (handover) {
+          setView("handover");
+          loadHandover(handover.handover_id);
+        } else {
+          api.board().then((d) => {
+            const t0 = d.transfers[0];
+            if (t0) {
+              setView("handover");
+              loadHandover(t0.handover_id);
+            }
+          });
+        }
+        return;
+      }
+      setView(v as View);
+    },
+    [file, group, handover, loadFile, loadHandover]
+  );
+
+  if (intro) {
+    return (
+      <Intro
+        onDone={() => {
+          localStorage.setItem("rca_intro_done", "1");
+          setIntro(false);
+        }}
+      />
+    );
+  }
+
+  if (!currentUser) {
+    return (
+      <>
+        <Login />
+        {isDemo && <DemoRail onGo={goTo} />}
+      </>
+    );
+  }
 
   const initials = currentUser.split(".")[0].charAt(0).toUpperCase() + currentUser.split(".")[1]?.charAt(0).toUpperCase();
 
@@ -209,6 +268,7 @@ export default function App() {
       </header>
 
       <div className="synthetic-ribbon">Demo · all data synthetic · جميع البيانات تجريبية</div>
+      <ContextStrip view={view} file={file} board={board} />
 
       <main id="main">
         {view === "board" && (
@@ -236,6 +296,10 @@ export default function App() {
             onGroup={setGroup}
             onError={showError}
             reloadFile={() => loadFile(group)}
+            onOpenHandover={(id) => {
+              setView("handover");
+              loadHandover(id);
+            }}
           />
         )}
         {view === "handover" && (
@@ -245,8 +309,31 @@ export default function App() {
         {view === "evals" && <EvalsView />}
       </main>
 
+      {isDemo && <DemoRail onGo={goTo} />}
       <SourceDrawer ev={drawer} onClose={() => setDrawer(null)} />
       <Toasts items={toasts} dismiss={(id) => setToasts((t) => t.filter((x) => x.id !== id))} />
+    </div>
+  );
+}
+
+function ContextStrip({ view, file, board }: { view: string; file: ClientFile | null; board: BoardItem[] }) {
+  const blocked = board.filter((t) => t.status !== "closed" && t.blocking_count > 0).length;
+  const msg: Record<string, string> = {
+    board: blocked
+      ? `${blocked} transfer(s) can't safely close yet — open one to see what's blocking it.`
+      : "Every transfer in progress. Open one to review or close it.",
+    file: file
+      ? `This file was assembled from the bank's systems — ${file.open_conflicts} conflict(s) found. Every fact links to its source; ask it anything below.`
+      : "Loading the client file…",
+    handover:
+      "Three steps: answer the gap questions, accept the duties, then close — only when nothing critical is unowned.",
+    agents: "Work the assistant prepared on its own. A person always acts on it.",
+    evals: "Automated safety checks on synthetic data. Green means the guarantees held.",
+  };
+  return (
+    <div className="context-strip">
+      <span className="dot" />
+      {msg[view] || ""}
     </div>
   );
 }
@@ -279,6 +366,9 @@ function Login() {
           </button>
         ))}
         {err && <p className="banner error">{err}</p>}
+        <p className="meta" style={{ marginTop: 14 }}>
+          Judges & demo: append <code>?demo=1</code> to the URL for the guided 8-beat path.
+        </p>
       </div>
     </div>
   );
@@ -310,7 +400,9 @@ function Board({
         <div>
           <h2>Readiness board</h2>
           <p className="lead">
-            Every transfer, and exactly what is blocking it from closing.
+            A banker is leaving; their clients must move without anything falling through the
+            cracks. This board shows every transfer and exactly what's stopping each one from
+            closing safely.
           </p>
         </div>
         <div className="row">
@@ -407,6 +499,7 @@ function FileView({
   onGroup,
   onError,
   reloadFile,
+  onOpenHandover,
 }: {
   file: ClientFile;
   ask: AskResult | null;
@@ -418,6 +511,7 @@ function FileView({
   onGroup: (g: string) => void;
   onError: (s: string) => void;
   reloadFile: () => void;
+  onOpenHandover: (id: string) => void;
 }) {
   const [tab, setTab] = useState<"brief" | "timeline" | "commitments" | "people" | "sources">("brief");
   const [ar, setAr] = useState(false);
@@ -506,6 +600,14 @@ function FileView({
         </div>
       </div>
 
+      <div className="assembled-note">
+        <span className="pull">{T("Assembled for you", "أُعدّ لك تلقائياً")}</span>
+        {T(
+          `Pulled together from CRM, core banking, the document archive, email and notes — ${file.facts.length} facts, ${file.open_conflicts} conflict(s), every line traceable to its source.`,
+          `جُمع من أنظمة البنك — ${file.facts.length} معلومة، ${file.open_conflicts} تعارض، كل سطر مرتبط بمصدره.`
+        )}
+      </div>
+
       <div className="ask-panel">
         <input
           placeholder={T(
@@ -540,6 +642,15 @@ function FileView({
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {link.handover_id && (
+        <div className="next-nudge">
+          Next:{" "}
+          <button className="link" onClick={() => onOpenHandover(link.handover_id!)}>
+            open the transfer for this client →
+          </button>
         </div>
       )}
 
@@ -704,6 +815,17 @@ function FileView({
     </section>
   );
 }
+function plainBlock(reasons: string[]): string {
+  const owner = reasons.filter((r) => /owner/i.test(r)).length;
+  const conflict = reasons.filter((r) => /conflict/i.test(r)).length;
+  const accept = reasons.filter((r) => /accept/i.test(r)).length;
+  const parts: string[] = [];
+  if (owner) parts.push(`${owner} item(s) still need someone to own them`);
+  if (conflict) parts.push(`${conflict} fact(s) where two systems disagree`);
+  if (accept) parts.push(`${accept} duty(ies) the incoming RM hasn't accepted`);
+  return parts.join("; ") + ". Nothing critical is allowed to slip through.";
+}
+
 function HandoverView({
   handover,
   onReload,
@@ -728,6 +850,9 @@ function HandoverView({
   const current = questions.find((q) => !q.answer_text);
   const qIndex = current ? questions.indexOf(current) + 1 : questions.length;
   const blockers = handover.status === "closed" ? [] : handover.blocking;
+  const total = handover.items.length || 1;
+  const done = handover.items.filter((i) => i.status === "accepted" || i.status === "resolved").length;
+  const pct = Math.round((done / total) * 100);
 
   return (
     <section>
@@ -745,6 +870,22 @@ function HandoverView({
           Refresh
         </button>
       </div>
+
+      <div className="progress">
+        <div className="progress-bar">
+          <span style={{ width: `${pct}%` }} />
+        </div>
+        <span className="meta">
+          {done} of {total} items settled ·{" "}
+          {handover.ready ? "ready to close" : `${handover.blocking.length} blocker(s)`}
+        </span>
+      </div>
+      {!handover.ready && handover.blocking.length > 0 && (
+        <div className="why-blocked">
+          <strong>Why this can't close yet:</strong>{" "}
+          {plainBlock(handover.blocking.map((b) => b.reason))}
+        </div>
+      )}
 
       <h3>
         <span className="step">1</span> Gap questions for the outgoing RM{" "}
@@ -980,10 +1121,15 @@ function AgentsView() {
         <div>
           <h2>Agentic workflow</h2>
           <p className="lead">
-            The assistant prepares work on triggers — leave, expiry, handover — and a person always
-            acts.
+            The assistant prepares work on triggers — leave, expiry, handover, referrals — and a
+            person always acts.
           </p>
-          <p className="meta">{data.pattern} · as of {data.as_of}</p>
+          <p className="meta">
+            {data.pattern} · as of {data.as_of} ·{" "}
+            <a className="link" href="/docs" target="_blank" rel="noreferrer">
+              interactive API docs
+            </a>
+          </p>
         </div>
       </div>
 
@@ -1053,6 +1199,46 @@ function AgentsView() {
           {b.do_not_say.length > 0 && (
             <p className="recollection" style={{ marginTop: 10 }}>
               <strong>Do not say:</strong> {b.do_not_say.join(" · ")}
+            </p>
+          )}
+        </div>
+      ))}
+
+      {data.referral_packs.map((rp) => (
+        <div key={rp.doc_id} className="q-card" style={{ marginTop: 18 }}>
+          <div className="row" style={{ justifyContent: "space-between" }}>
+            <p className="q-text">Referral pack — {rp.to_role}</p>
+            <span className="chip verified">assembled automatically</span>
+          </div>
+          <p className="meta" style={{ marginTop: 4 }}>
+            {rp.group_id} · asked by {rp.requested_by} · decision needed by {rp.decision_needed_by}
+          </p>
+          <p style={{ margin: "8px 0" }} dir="auto">
+            <strong>{rp.question}</strong>
+          </p>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Documents already held (never re-ask the client)</th>
+                  <th>Record</th>
+                  <th>Valid until</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rp.documents_already_held.map((d, i) => (
+                  <tr key={i}>
+                    <td>{d.title}</td>
+                    <td className="meta">{d.record_id}</td>
+                    <td className="meta">{d.valid_until}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {rp.history.length > 0 && (
+            <p className="meta" style={{ marginTop: 8 }}>
+              History: {rp.history.join(" · ")}
             </p>
           )}
         </div>

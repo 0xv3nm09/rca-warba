@@ -170,3 +170,22 @@ async def test_signatory_only_from_mandate(client):
     conflict = [f for f in contacts if f["label"] == "conflict"]
     assert mandate and "Ahmad K." in mandate[0]["text"], "mandate is the authority"
     assert conflict, "note naming the CFO as signatory becomes a conflict"
+
+
+async def test_referral_lists_valid_documents_only(client):
+    """Use case 5 / walkthrough Flow F: the pack lists documents already on
+    file (never re-ask the client, F5) and is idempotent per question."""
+    _, t_sara, _ = await seeded_ids(client)
+    body = {
+        "group_id": "GHC-001",
+        "question": "Confirm documents required to renew guarantee G-2291 before 13 Oct",
+    }
+    r = await client.post("/agents/referrals", headers=H(t_sara), json=body)
+    assert r.status_code == 201, r.text
+    pack = r.json()["pack"]
+    ids = [d["record_id"] for d in pack["documents_already_held"]]
+    assert "ecm:doc-FS-2025" in ids and "ecm:doc-CR-GHC" in ids
+    assert all(d["valid_until"] >= "2026-09-22" for d in pack["documents_already_held"])
+    assert pack["decision_needed_by"] <= "2026-10-06"  # a week before expiry
+    r2 = await client.post("/agents/referrals", headers=H(t_sara), json=body)
+    assert r2.json()["pack"]["doc_id"] == pack["doc_id"]  # running twice never duplicates

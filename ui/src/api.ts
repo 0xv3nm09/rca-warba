@@ -199,6 +199,16 @@ export const api = {
         due_during_cover: { item: string; owner: string | null; label: string }[];
         do_not_say: string[];
       }[];
+      referral_packs: {
+        doc_id: string;
+        group_id: string;
+        question: string;
+        to_role: string;
+        requested_by: string;
+        documents_already_held: { record_id: string; title: string; valid_until: string | null }[];
+        history: string[];
+        decision_needed_by: string;
+      }[];
       alerts: { alert_id: string; kind: string; group_id: string | null; text: string; to_role: string }[];
       audit_tail: { seq: number; ts: string; actor: string; action: string; subject: string }[];
     }>("GET", "/agents/overview"),

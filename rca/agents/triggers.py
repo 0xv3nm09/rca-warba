@@ -190,3 +190,49 @@ async def process_leave_events(db) -> list[str]:
     for leave in await cal.all_rows():
         ids.append((await on_leave_booked(db, leave)).id)
     return ids
+
+
+async def prepare_referral_pack(
+    db, *, group_id: str, question: str, to_role: str, requested_by: str, today_: date
+) -> dict:
+    """Specialist referral pack (use case 5, walkthrough Flow F): the question,
+    the documents ALREADY on file (so the client is never re-asked, F5), and the
+    relevant history. Idempotent per (group, role, question)."""
+    import hashlib
+
+    key = hashlib.blake2b(f"{group_id}:{to_role}:{question}".encode(), digest_size=5).hexdigest()
+    doc_id = f"ref_{key}"
+    existing = await db.get(AgentDocRow, doc_id)
+    if existing:
+        return {"doc_id": existing.id, **existing.payload}
+
+    facts = list((await db.execute(select(FactRow).where(FactRow.group_id == group_id))).scalars())
+    documents = [
+        {
+            "record_id": f.evidence[0]["record_id"] if f.evidence else "",
+            "title": f.text,
+            "valid_until": f.due_date.isoformat() if f.due_date else None,
+        }
+        for f in facts
+        if f.kind == "document" and f.due_date and f.due_date >= today_
+    ]
+    history = [f.text for f in facts if f.kind == "event" or "re-sent" in f.text.lower()]
+    facility = next((f for f in facts if f.kind == "facility" and f.due_date), None)
+    decision_needed_by = (
+        (facility.due_date - timedelta(days=7)).isoformat()
+        if facility
+        else (today_ + timedelta(days=14)).isoformat()
+    )
+    payload = {
+        "group_id": group_id,
+        "question": question[:300],
+        "to_role": to_role,
+        "requested_by": requested_by,
+        "documents_already_held": documents,
+        "history": history[:5],
+        "decision_needed_by": decision_needed_by,
+    }
+    db.add(AgentDocRow(id=doc_id, kind="referral_pack", group_id=group_id, for_user=None, payload=payload))
+    await db.commit()
+    log.info("referral_pack_ready", group_id=group_id, to_role=to_role)
+    return {"doc_id": doc_id, **payload}
