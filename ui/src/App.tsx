@@ -11,14 +11,14 @@ import {
   type Evidence,
   type HandoverDetail,
 } from "./api";
-import { Citation, fmtDate, fmtKwd, LabelChip, SourceDrawer } from "./components";
+import { Citation, ConfidenceBand, fmtDate, fmtKwd, LabelChip, SourceDrawer } from "./components";
 
 type View = "board" | "file" | "handover";
 
 const DEMO_USERS = [
-  { id: "sara.rm", label: "Sara — incoming RM", group: "GHC-001" },
-  { id: "omar.rm", label: "Omar — outgoing RM", group: "GHC-001" },
-  { id: "lead.one", label: "Team lead", group: null },
+  { id: "sara.rm", label: "Sara — incoming RM", role: "RM · GHC-001", group: "GHC-001" },
+  { id: "omar.rm", label: "Omar — outgoing RM", role: "RM · GHC-001", group: "GHC-001" },
+  { id: "lead.one", label: "Team lead", role: "Lead · all groups", group: null },
 ];
 
 export default function App() {
@@ -67,11 +67,16 @@ export default function App() {
 
   if (!currentUser) return <Login />;
 
+  const initials = currentUser.split(".")[0].charAt(0).toUpperCase() + currentUser.split(".")[1]?.charAt(0).toUpperCase();
+
   return (
     <div className="app">
       <header>
         <div className="brand">
-          RCA <span>· Relationship Continuity Assistant</span>
+          <span className="mark">R</span>
+          <span>
+            RCA <span className="sub">· Relationship Continuity Assistant</span>
+          </span>
         </div>
         <nav>
           <button className={view === "board" ? "on" : ""} onClick={() => setView("board")}>
@@ -82,7 +87,10 @@ export default function App() {
           </button>
         </nav>
         <div className="who">
-          {currentUser} · {currentGroup || "all groups"}{" "}
+          <span className="avatar">{initials}</span>
+          <span>
+            {currentUser} · {currentGroup || "all groups"}
+          </span>
           <button
             className="ghost"
             onClick={() => {
@@ -90,12 +98,16 @@ export default function App() {
               location.reload();
             }}
           >
-            sign out
+            Sign out
           </button>
         </div>
       </header>
 
-      {error && <div className="banner error" onClick={() => setError("")}>{error}</div>}
+      {error && (
+        <div className="banner error" onClick={() => setError("")}>
+          {error}
+        </div>
+      )}
 
       <main>
         {view === "board" && (
@@ -110,7 +122,12 @@ export default function App() {
           />
         )}
         {view === "file" && file && (
-          <FileView file={file} ask={ask} question={question} setQuestion={setQuestion} busy={busy}
+          <FileView
+            file={file}
+            ask={ask}
+            question={question}
+            setQuestion={setQuestion}
+            busy={busy}
             onAsk={async () => {
               setBusy(true);
               setAsk(null);
@@ -126,11 +143,7 @@ export default function App() {
           />
         )}
         {view === "handover" && (
-          <HandoverView
-            handover={handover}
-            onReload={() => handover && loadHandover(handover.handover_id)}
-            onError={setError}
-          />
+          <HandoverView handover={handover} onReload={() => handover && loadHandover(handover.handover_id)} onError={setError} />
         )}
       </main>
 
@@ -144,8 +157,11 @@ function Login() {
   return (
     <div className="login-wrap">
       <div className="login">
+        <div className="logo">R</div>
         <h1>RCA Console</h1>
-        <p className="meta">Warba Track 2 prototype · synthetic data · local profile</p>
+        <p className="meta" style={{ marginBottom: 22 }}>
+          Warba Track 2 prototype · synthetic data · local profile
+        </p>
         {DEMO_USERS.map((u) => (
           <button
             key={u.id}
@@ -160,7 +176,7 @@ function Login() {
               }
             }}
           >
-            {u.label}
+            {u.label} <span className="r">{u.role}</span>
           </button>
         ))}
         {err && <p className="banner error">{err}</p>}
@@ -170,43 +186,106 @@ function Login() {
 }
 
 function Board({ board, onOpen, onReload }: { board: BoardItem[]; onOpen: (id: string) => void; onReload: () => void }) {
+  const [alerts, setAlerts] = useState<{ alert_id: string; kind: string; text: string; group_id: string | null }[]>([]);
+  useEffect(() => {
+    api.alerts().then((d) => setAlerts(d.alerts)).catch(() => {});
+  }, []);
+  const blocked = board.filter((t) => t.status !== "closed" && t.blocking_count > 0).length;
+  const reasons = board.reduce((n, t) => n + t.blocking_count, 0);
+
   return (
     <section>
-      <div className="row">
-        <h2>Readiness board</h2>
-        <button className="ghost" onClick={onReload}>refresh</button>
+      <div className="row" style={{ justifyContent: "space-between" }}>
+        <div>
+          <h2>Readiness board</h2>
+          <p className="meta">A transfer closes only when every critical item is owned, dated and accepted.</p>
+        </div>
+        <button className="ghost" onClick={onReload}>
+          Refresh
+        </button>
       </div>
-      {board.length === 0 && <p className="meta">No transfers. Start one via the API, or re-seed.</p>}
-      <div className="cards">
-        {board.map((t) => (
-          <div key={t.handover_id} className={`card ${t.status === "closed" ? "done" : t.blocking_count ? "blocked" : "ok"}`}>
-            <div className="row">
-              <strong>{t.group_id}</strong>
-              <span className="chip">{t.status}</span>
+
+      <div className="stats">
+        <div className="stat">
+          <span className="n">{board.length}</span>
+          <span className="l">transfers in flight</span>
+        </div>
+        <div className="stat">
+          <span className="n warn">{blocked}</span>
+          <span className="l">blocked</span>
+        </div>
+        <div className="stat">
+          <span className="n">{reasons}</span>
+          <span className="l">blocking reasons</span>
+        </div>
+        <div className="stat">
+          <span className="n warn">{alerts.length}</span>
+          <span className="l">agent alerts</span>
+        </div>
+      </div>
+
+      <div className="board-grid">
+        <div className="cards">
+          {board.length === 0 && <p className="meta">No transfers. Start one via the API, or re-seed.</p>}
+          {board.map((t) => (
+            <div key={t.handover_id} className="card">
+              <div className="status-line">
+                <span className="gid">{t.group_id}</span>
+                <span className={`pill ${t.status}`}>{t.status}</span>
+              </div>
+              <p className="meta">
+                {t.from_rm} → {t.to_rm} · effective {fmtDate(t.effective_date)} · {t.kind}
+              </p>
+              {t.blocking_count > 0 ? (
+                <ul className="blockers">
+                  {t.blocking.map((b, i) => (
+                    <li key={i}>{b}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="ok-text">✓ Ready to close</p>
+              )}
+              <div className="foot">
+                <span className="meta">
+                  {t.open_items} open · next due {fmtDate(t.next_due)}
+                </span>
+                <button onClick={() => onOpen(t.handover_id)}>Open transfer</button>
+              </div>
             </div>
-            <p className="meta">
-              {t.from_rm} → {t.to_rm} · effective {fmtDate(t.effective_date)} · {t.kind}
+          ))}
+        </div>
+
+        {alerts.length > 0 && (
+          <aside className="alerts">
+            <h3 style={{ marginTop: 0 }}>Agent alerts</h3>
+            {alerts.map((a) => (
+              <div key={a.alert_id} className="alert-item">
+                <span className="chip escalate">{a.kind.replace(/_/g, " ")}</span>
+                <p>{a.text}</p>
+                <span className="meta">
+                  raised automatically · routed to {a.group_id ? `${a.group_id} team lead` : "team lead"}
+                </span>
+              </div>
+            ))}
+            <p className="meta" style={{ marginTop: 10 }}>
+              Nightly scans run in the worker; duplicate alerts are suppressed by key.
             </p>
-            {t.blocking_count > 0 ? (
-              <ul className="blockers">
-                {t.blocking.map((b, i) => (
-                  <li key={i}>{b}</li>
-                ))}
-              </ul>
-            ) : (
-              <p className="ok-text">Ready to close</p>
-            )}
-            <p className="meta">{t.open_items} open items · next due {fmtDate(t.next_due)}</p>
-            <button onClick={() => onOpen(t.handover_id)}>Open transfer</button>
-          </div>
-        ))}
+          </aside>
+        )}
       </div>
     </section>
   );
 }
 
 function FileView({
-  file, ask, question, setQuestion, busy, onAsk, onOpenSource, onGroup,
+  file,
+  ask,
+  question,
+  setQuestion,
+  busy,
+  onAsk,
+  onOpenSource,
+  onGroup,
 }: {
   file: ClientFile;
   ask: AskResult | null;
@@ -221,11 +300,15 @@ function FileView({
   const groups = ["GHC-001", "ALS-014", "NLG-022"];
   return (
     <section>
-      <div className="row">
-        <h2>
-          {file.group_name || file.group_id} <span className="meta">· {file.group_id} · as of {fmtDate(file.as_of)}</span>
-        </h2>
-        <select value={file.group_id} onChange={(e) => onGroup(e.target.value)}>
+      <div className="row" style={{ justifyContent: "space-between" }}>
+        <div>
+          <h2>{file.group_name || file.group_id}</h2>
+          <p className="meta">
+            {file.group_id} · as of {fmtDate(file.as_of)} · {file.open_conflicts} open conflict
+            {file.open_conflicts === 1 ? "" : "s"}
+          </p>
+        </div>
+        <select value={file.group_id} onChange={(e) => onGroup(e.target.value)} aria-label="Client group">
           {groups.map((g) => (
             <option key={g}>{g}</option>
           ))}
@@ -240,14 +323,14 @@ function FileView({
           onKeyDown={(e) => e.key === "Enter" && onAsk()}
         />
         <button disabled={busy || question.length < 3} onClick={onAsk}>
-          {busy ? "…" : "Ask"}
+          {busy ? "Asking…" : "Ask"}
         </button>
       </div>
       {ask && (
         <div className={`answer ${ask.label}`}>
           <div className="row">
             <LabelChip label={ask.label} reasons={ask.reasons} />
-            <span className="meta">confidence {ask.confidence}</span>
+            <ConfidenceBand confidence={ask.confidence} />
           </div>
           <p>{ask.answer}</p>
           <p className="meta">
@@ -262,10 +345,9 @@ function FileView({
       <nav className="tabs">
         {(["brief", "commitments", "people", "sources"] as const).map((t) => (
           <button key={t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>
-            {t}
+            {t === "brief" ? "Relationship brief" : t[0].toUpperCase() + t.slice(1)}
           </button>
         ))}
-        {file.open_conflicts > 0 && <span className="chip conflict">{file.open_conflicts} conflict(s)</span>}
       </nav>
 
       {tab === "brief" && (
@@ -279,6 +361,7 @@ function FileView({
                   {f.due_date && <span className="meta"> · due {fmtDate(f.due_date)}</span>}
                 </p>
                 <div className="fact-side">
+                  <ConfidenceBand confidence={f.confidence} />
                   <LabelChip label={f.label} reasons={f.reasons} />
                   {f.evidence.map((e, i) => (
                     <Citation key={i} ev={e} n={i + 1} onOpen={onOpenSource} />
@@ -309,7 +392,7 @@ function FileView({
                 <td>
                   <span className="chip">{c.state}</span>
                 </td>
-                <td>{c.owner || <span className="chip conflict">unowned</span>}</td>
+                <td>{c.owner || <span className="chip conflict">Unowned</span>}</td>
                 <td>{fmtDate(c.due_date)}</td>
                 <td>
                   {c.evidence.map((e, i) => (
@@ -330,24 +413,43 @@ function FileView({
       )}
 
       {tab === "people" && (
-        <ul className="facts">
-          {file.facts
-            .filter((f) => f.kind === "contact")
-            .map((f) => (
-              <li key={f.fact_id}>
-                <div className="fact-row">
-                  <p dir="auto">{f.text}</p>
-                  <div className="fact-side">
-                    <LabelChip label={f.label} reasons={f.reasons} />
-                    {f.evidence.map((e, i) => (
-                      <Citation key={i} ev={e} n={i + 1} onOpen={onOpenSource} />
-                    ))}
+        <>
+          <ul className="facts">
+            {file.facts
+              .filter((f) => f.kind === "contact")
+              .map((f) => (
+                <li key={f.fact_id}>
+                  <div className="fact-row">
+                    <p dir="auto">{f.text}</p>
+                    <div className="fact-side">
+                      <LabelChip label={f.label} reasons={f.reasons} />
+                      {f.evidence.map((e, i) => (
+                        <Citation key={i} ev={e} n={i + 1} onOpen={onOpenSource} />
+                      ))}
+                    </div>
                   </div>
-                </div>
-              </li>
-            ))}
-          <li className="meta">Entities: {file.entities.map((e) => e.legal_name_en).join(" · ")}</li>
-        </ul>
+                </li>
+              ))}
+          </ul>
+          <table style={{ marginTop: 12 }}>
+            <thead>
+              <tr>
+                <th>Legal entity</th>
+                <th>Role</th>
+                <th>CR number</th>
+              </tr>
+            </thead>
+            <tbody>
+              {file.entities.map((e) => (
+                <tr key={e.entity_id}>
+                  <td>{e.legal_name_en}</td>
+                  <td className="meta">{e.role}</td>
+                  <td className="meta">{e.cr_number}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
       )}
 
       {tab === "sources" && (
@@ -367,7 +469,9 @@ function FileView({
 }
 
 function HandoverView({
-  handover, onReload, onError,
+  handover,
+  onReload,
+  onError,
 }: {
   handover: HandoverDetail | null;
   onReload: () => void;
@@ -381,27 +485,34 @@ function HandoverView({
   const questions = handover.items.filter((i) => i.kind === "question");
   const duties = handover.items.filter((i) => i.kind === "commitment");
   const conflicts = handover.items.filter((i) => i.kind === "conflict");
-  const accepted = handover.items.filter((i) => i.status === "accepted").map((i) => i.item_id);
-  const returned = handover.items.filter((i) => i.status === "returned").map((i) => i.item_id);
+  const accepted = handover.items.filter((i) => i.status === "accepted").length;
+  const returned = handover.items.filter((i) => i.status === "returned").length;
 
   return (
     <section>
-      <div className="row">
-        <h2>
-          Transfer {handover.group_id} <span className="meta">{handover.from_rm} → {handover.to_rm} · {handover.status}</span>
-        </h2>
-        <button className="ghost" onClick={onReload}>refresh</button>
+      <div className="row" style={{ justifyContent: "space-between" }}>
+        <div>
+          <h2>
+            Transfer {handover.group_id} <span className={`pill ${handover.status}`}>{handover.status}</span>
+          </h2>
+          <p className="meta">
+            {handover.from_rm} → {handover.to_rm}
+          </p>
+        </div>
+        <button className="ghost" onClick={onReload}>
+          Refresh
+        </button>
       </div>
 
-      <h3>1 · Gap questions for the outgoing RM</h3>
+      <h3>
+        <span className="step">1</span> Gap questions for the outgoing RM
+      </h3>
       {questions.map((q) => (
         <div key={q.item_id} className="q-card">
-          <p>
-            <strong>{q.question_text}</strong>
-          </p>
+          <p className="q-text">{q.question_text}</p>
           <p className="meta">Why asked: {q.why_asked} · failure point {q.failure_point}</p>
           {q.answer_text ? (
-            <p className="recollection">Saved as recollection: “{q.answer_text}”</p>
+            <p className="recollection">Saved as recollection — “{q.answer_text}”</p>
           ) : (
             <div className="ask-panel">
               <input
@@ -427,7 +538,9 @@ function HandoverView({
         </div>
       ))}
 
-      <h3>2 · Acceptance by the incoming RM</h3>
+      <h3>
+        <span className="step">2</span> Acceptance by the incoming RM
+      </h3>
       <table>
         <thead>
           <tr>
@@ -435,21 +548,21 @@ function HandoverView({
             <th>Kind</th>
             <th>Owner</th>
             <th>Status</th>
-            <th>Assign to</th>
+            <th>Assign</th>
           </tr>
         </thead>
         <tbody>
           {[...duties, ...conflicts].map((i) => (
             <tr key={i.item_id}>
               <td>{i.kind === "conflict" ? "Conflict fact" : "Commitment"}</td>
-              <td>{i.kind}</td>
+              <td className="meta">{i.kind}</td>
               <td>{i.owner || "—"}</td>
               <td>
                 <span className="chip">{i.status}</span>
               </td>
-              <td className="row">
+              <td>
                 <button
-                  className="ghost"
+                  className="assign-btn"
                   onClick={async () => {
                     try {
                       await api.assign(handover.handover_id, i.item_id, "sara.rm", "2026-09-26");
@@ -459,7 +572,7 @@ function HandoverView({
                     }
                   }}
                 >
-                  sara.rm
+                  → sara.rm
                 </button>
               </td>
             </tr>
@@ -486,13 +599,17 @@ function HandoverView({
           Accept duties / return conflicts
         </button>
       </div>
-      <p className="meta">accepted: {accepted.length} · returned: {returned.length}</p>
+      <p className="meta">accepted: {accepted} · returned: {returned}</p>
 
-      <h3>3 · Close transfer</h3>
+      <h3>
+        <span className="step">3</span> Close transfer
+      </h3>
       {closeMsg.length > 0 && (
         <div className="banner error">
           {closeMsg.map((m, i) => (
-            <p key={i}>⛔ {m}</p>
+            <p key={i} style={{ margin: "4px 0" }}>
+              ⛔ {m}
+            </p>
           ))}
         </div>
       )}

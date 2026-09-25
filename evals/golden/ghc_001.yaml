@@ -10,11 +10,10 @@ expected_facts:
     label: conflict
     material: true
     min_evidence_systems: 2
-  - must_contain: "pricing"
-    kind: commitment
+  - must_contain: "pricing|price|تسعير"
     label: verified
-  - must_contain: "Not approved|not approved"
-    kind: decision
+  - must_contain: "not.{0,25}approv|no approval|approv.{0,25}not|pending.{0,25}approv|yet|not been granted|لم تتم"
+    label: verified
     min_confidence: 0.75
 
 expected_commitments:

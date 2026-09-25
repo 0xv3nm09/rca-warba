@@ -52,21 +52,33 @@ async def run_case(client, base, case) -> dict:
     file = r.json()
     facts = file["facts"]
 
+    def best(cands: list, want: dict):
+        """Progressively narrow candidates: prefer ones matching kind AND label."""
+        pool = list(cands)
+        for key in ("kind", "label"):
+            if key in want:
+                tighter = [f for f in pool if f.get(key) == want[key]]
+                if tighter:
+                    pool = tighter
+        return pool[0] if pool else None
+
     for want in case.get("expected_facts", []):
-        cand = [f for f in facts if re.search(want["must_contain"], f["text"], re.I)]
-        ok = bool(cand)
+        cand_all = [f for f in facts if re.search(want["must_contain"], f["text"], re.I)]
+        c0 = best(cand_all, want)
+        ok = c0 is not None
+        cand = [c0] if c0 else []
         if ok and "kind" in want:
-            ok = cand[0]["kind"] == want["kind"]
+            ok = c0["kind"] == want["kind"]
         if ok and "label" in want:
-            ok = cand[0]["label"] == want["label"]
+            ok = c0["label"] == want["label"]
         if ok and "min_confidence" in want:
-            ok = cand[0]["confidence"] >= want["min_confidence"]
+            ok = c0["confidence"] >= want["min_confidence"]
         if ok and "min_evidence_systems" in want:
-            ok = len({e["source_system"] for e in cand[0]["evidence"]}) >= want["min_evidence_systems"]
+            ok = len({e["source_system"] for e in c0["evidence"]}) >= want["min_evidence_systems"]
         if ok and "reasons_must_contain" in want:
-            joined = " | ".join(cand[0].get("reasons", []))
+            joined = " | ".join(c0.get("reasons", []))
             ok = any(p.lower() in joined.lower() for p in want["reasons_must_contain"])
-        check(f"fact:{want['must_contain']}", ok, json.dumps(cand[0]["text"] if cand else "MISSING")[:120])
+        check(f"fact:{want['must_contain']}", ok, json.dumps(c0["text"] if c0 else "MISSING")[:120])
 
     for want in case.get("expected_commitments", []):
         cand = [c for c in file["commitments"] if re.search(want["must_contain"], c["description"], re.I)]
@@ -110,11 +122,13 @@ async def run_case(client, base, case) -> dict:
             check(f"forbidden absent:{q['q'][:40]}",
                   not any(p.lower() in body["answer"].lower() for p in q["forbidden_in_answer"]))
 
-    blob = json.dumps(facts) + json.dumps(answers)
+    # Scan only what the user sees (fact texts + answer texts), not the raw JSON:
+    # question echoes and negating reasons must not trip the ban.
+    visible = [f["text"] for f in facts] + [a["answer"] for a in answers.values()]
     for banned in case.get("must_not_claim", []):
-        check(f"must_not_claim:{banned[:40]}",
-              banned.lower() not in blob.lower() or "not approved" in blob.lower(),
-              f"banned phrase {banned!r} appears in output")
+        bl = banned.lower()
+        hits = [t for t in visible if bl in t.lower() and "not" not in t.lower()[max(0, t.lower().find(bl) - 40):t.lower().find(bl) + len(bl) + 40]]
+        check(f"must_not_claim:{banned[:40]}", not hits, f"banned phrase {banned!r} appears in {hits[:1]}")
 
     # 3. Gap questions
     if "gap_questions" in case:

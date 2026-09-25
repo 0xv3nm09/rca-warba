@@ -156,5 +156,10 @@ export const api = {
   assign: (hid: string, itemId: string, owner: string, due_date?: string) =>
     call("POST", `/handovers/${hid}/exceptions/${itemId}/assign`, { owner, due_date }),
   close: (hid: string) => call<{ closed: boolean }>("POST", `/handovers/${hid}/close`),
+  alerts: () =>
+    call<{ alerts: { alert_id: string; kind: string; group_id: string | null; text: string; to_role: string }[] }>(
+      "GET",
+      "/alerts"
+    ),
   auditVerify: () => call<{ chain_valid: boolean }>("GET", "/admin/audit/verify"),
 };

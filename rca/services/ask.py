@@ -48,7 +48,14 @@ async def answer(db, gw: ModelGateway, *, group_id: str, question: str, user_id:
             label, conf, sentences = "verified", 0.95, ["An approval is recorded for this request."]
             citations = [_ev(f) for f in facts if "approval" in f.text.lower()][:1]
         else:
-            f = pricing_facts[0] if pricing_facts else None
+            # Prefer the pricing-request fact (not the older declined-proposal note).
+            def _rank(f: FactRow) -> tuple[int, str]:
+                is_request = bool(re.search(r"request|update|تحديث", f.text, re.I))
+                as_of = f.evidence[0].get("as_of", "") if f.evidence else ""
+                return (0 if is_request else 1, "" if is_request else str(as_of))
+
+            ranked = sorted(pricing_facts, key=_rank, reverse=False)
+            f = ranked[0] if ranked else None
             label, conf = "not_in_records", 0.0
             sentences = [
                 "No approval is recorded.",

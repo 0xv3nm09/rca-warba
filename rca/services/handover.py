@@ -1,5 +1,6 @@
 """Handover workflow: gap questions, acceptance, exceptions, readiness close."""
 
+import re
 from datetime import UTC, date, datetime
 
 import structlog
@@ -102,7 +103,9 @@ async def gap_questions(db, group_id: str) -> list[dict]:
     questions = []
     for f in await _facts(db, group_id):
         rec = f.evidence[0]["record_id"] if f.evidence else "record"
-        if "declined" in f.text.lower() and "no reason" in f.text.lower():
+        if re.search(r"declin|reject", f.text, re.I):
+            # The decision is on file; if a reason existed it would appear as a
+            # separate claim, so this question is asked whenever none is linked.
             questions.append(
                 {
                     "text": "Why did the client decline the pricing proposal?",
