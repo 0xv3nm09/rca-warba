@@ -165,6 +165,8 @@ export const api = {
   ask: (groupId: string, question: string, signal?: AbortSignal) =>
     call<AskResult>("POST", `/groups/${groupId}/ask`, { question, lang: "en" }, signal),
   handover: (id: string) => call<HandoverDetail>("GET", `/handovers/${id}`),
+  package: (id: string) =>
+    call<any>("GET", `/handovers/${id}/package`),
   questions: (id: string) =>
     call<{ questions: { question_id: string; text: string; why_asked: string; failure_point: string }[] }>(
       "GET",

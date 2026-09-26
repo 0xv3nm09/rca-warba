@@ -1071,7 +1071,15 @@ function FileView({
 
       {tab === "sources" &&
         (() => {
-          const all = [...new Set(file.facts.flatMap((f) => f.evidence))];
+          const seenSrc = new Set<string>();
+          const all = file.facts
+            .flatMap((f) => f.evidence)
+            .filter((e) => {
+              const k = `${e.record_id}#${e.record_version}`;
+              if (seenSrc.has(k)) return false;
+              seenSrc.add(k);
+              return true;
+            });
           const bySystem = new Map<string, typeof all>();
           for (const e of all) {
             const list = bySystem.get(e.source_system) || [];
@@ -1136,6 +1144,10 @@ function plainBlock(reasons: string[]): string {
   return parts.join("; ") + ". Nothing critical is allowed to slip through.";
 }
 
+function T2a(en: string, _ar: string) {
+  return en;
+}
+
 function HandoverView({
   handover,
   onReload,
@@ -1148,6 +1160,7 @@ function HandoverView({
   const [note, setNote] = useState("");
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [closeMsg, setCloseMsg] = useState<string[]>([]);
+  const [pkg, setPkg] = useState<any>(null);
   if (!handover) return <p className="meta">Loading transfer…</p>;
 
   const questions = handover.items.filter((i) => i.kind === "question");
@@ -1339,6 +1352,13 @@ function HandoverView({
         accepted: {accepted} · returned: {returned}
       </p>
 
+      <div className="ref-row">
+        <button className="ghost" onClick={async () => setPkg(await api.package(handover.handover_id))}>
+          {T2a("Handover package", "حزمة التسليم")}
+        </button>
+        <span className="meta">{T2a("The single transferable dossier: brief, commitments, people, open items, sources.", "الملف الكامل: موجز، التزامات، أشخاص، بنود مفتوحة، مصادر.")}</span>
+      </div>
+
       <div className="close-panel">
         <div className="close-head">
           <h3 style={{ margin: 0 }}>
@@ -1405,6 +1425,89 @@ function HandoverView({
               : "Close transfer"}
         </button>
       </div>
+
+      {pkg && (
+        <div className="drawer-backdrop" onClick={() => setPkg(null)}>
+          <div className="pkg" onClick={(e) => e.stopPropagation()}>
+            <div className="pkg-toolbar no-print">
+              <strong>Handover package · {pkg.handover.group_id}</strong>
+              <div className="row">
+                <button className="ghost" onClick={() => window.print()}>Print / Save PDF</button>
+                <button className="ghost" onClick={() => setPkg(null)}>Close</button>
+              </div>
+            </div>
+            <div className="pkg-sheet" dir="ltr">
+              <h2 className="pkg-title">{pkg.handover.group_id} — relationship handover package</h2>
+              <p className="meta">
+                {pkg.handover.from_rm} → {pkg.handover.to_rm} · effective {fmtDate(pkg.handover.effective_date)} · {pkg.handover.kind} · status {pkg.handover.status}
+              </p>
+              <div className={`pkg-ready ${pkg.readiness.ready ? "ok" : "blocked"}`}>{pkg.readiness.statement}</div>
+              {!pkg.readiness.ready && (
+                <ul className="blockers">{pkg.readiness.blocking.map((b: string, i: number) => <li key={i}>{b}</li>)}</ul>
+              )}
+
+              <h4>Brief — {pkg.provenance.fact_count} facts, every line sourced</h4>
+              <table>
+                <thead><tr><th>Fact</th><th>Label</th><th>Due</th><th>Sources</th></tr></thead>
+                <tbody>
+                  {pkg.brief.map((f: any, i: number) => (
+                    <tr key={i}>
+                      <td dir="auto">{f.text}{f.amount_kwd ? ` · KWD ${Number(f.amount_kwd).toLocaleString()}` : ""}</td>
+                      <td><span className={`chip ${f.label}`}>{f.label}</span></td>
+                      <td>{f.due_date || "—"}</td>
+                      <td className="meta">{f.sources.join(", ")}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <h4>Commitment register</h4>
+              <table>
+                <thead><tr><th>Commitment</th><th>State</th><th>Owner</th><th>Due</th><th>Source</th></tr></thead>
+                <tbody>
+                  {pkg.commitments.map((c: any, i: number) => (
+                    <tr key={i}>
+                      <td dir="auto">{c.description}</td>
+                      <td>{c.state}</td>
+                      <td>{c.owner || "UNOWNED"}</td>
+                      <td>{c.due_date || "—"}</td>
+                      <td className="meta">{c.sources.join(", ")}</td>
+                    </tr>
+                  ))}
+                  {pkg.commitments.length === 0 && <tr><td colSpan={5} className="meta">None.</td></tr>}
+                </tbody>
+              </table>
+
+              <h4>People &amp; entities</h4>
+              <table>
+                <thead><tr><th>Entity</th><th>Role</th><th>CR</th></tr></thead>
+                <tbody>
+                  {pkg.people.entities.map((e: any, i: number) => (
+                    <tr key={i}><td>{e.name}</td><td className="meta">{e.role}</td><td className="meta">{e.cr}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+              <ul className="facts" style={{ marginTop: 8 }}>
+                {pkg.people.contacts.map((c: any, i: number) => (
+                  <li key={i}><div className="fact-row"><p dir="auto">{c.text}</p><div className="fact-side"><LabelChip label={c.label} /></div></div></li>
+                ))}
+              </ul>
+
+              <h4>Sources appendix — {pkg.provenance.source_count} records from {pkg.provenance.assembled_from.join(", ")}</h4>
+              <table>
+                <thead><tr><th>System</th><th>Record</th><th>Version</th><th>As of</th><th>Lang</th></tr></thead>
+                <tbody>
+                  {pkg.sources.map((e: any, i: number) => (
+                    <tr key={i}><td>{e.source_system}</td><td>{e.record_id}</td><td className="meta">v{e.record_version}</td><td className="meta">{e.as_of}</td><td className="meta">{String(e.lang).toUpperCase()}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <p className="meta pkg-note">{pkg.provenance.note}</p>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

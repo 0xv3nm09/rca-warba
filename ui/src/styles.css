@@ -675,3 +675,33 @@ body.demo-mode main { padding-inline-end: 300px; }
 .ref-form button.ghost { background: transparent; color: var(--ink-2); border: 1px solid var(--line-2); }
 .toast.ok { background: var(--ok-700); }
 .eval-checks { max-height: 220px; overflow: auto; }
+
+/* ---- Handover package (the single transferable artifact) ---- */
+.pkg {
+  background: var(--card); border-radius: 16px; width: min(880px, 94vw);
+  max-height: 92vh; overflow: auto; box-shadow: 0 24px 80px rgba(11, 31, 58, 0.4);
+}
+.pkg-toolbar {
+  position: sticky; top: 0; background: var(--navy-900); color: #fff;
+  padding: 12px 20px; display: flex; align-items: center; justify-content: space-between;
+  z-index: 2;
+}
+.pkg-toolbar .ghost { border-color: rgba(255,255,255,0.3); color: #d5deee; }
+.pkg-sheet { padding: 26px 32px 34px; }
+.pkg-title { margin: 0 0 2px; font-size: 20px; }
+.pkg-ready { border-radius: 10px; padding: 10px 14px; font-size: 13.5px; margin: 12px 0 6px; font-weight: 550; }
+.pkg-ready.ok { background: var(--ok-100); color: var(--ok-700); }
+.pkg-ready.blocked { background: var(--bad-100); color: var(--bad-700); }
+.pkg-sheet h4 {
+  margin: 20px 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.8px;
+  color: var(--ink-3); border-bottom: 1px solid var(--line); padding-bottom: 5px;
+}
+.pkg-sheet table { box-shadow: none; }
+.pkg-note { margin-top: 18px; border-top: 1px dashed var(--line); padding-top: 10px; }
+
+@media print {
+  body * { visibility: hidden; }
+  .pkg, .pkg * { visibility: visible; }
+  .pkg { position: absolute; inset: 0; width: 100%; max-height: none; box-shadow: none; border-radius: 0; }
+  .no-print { display: none !important; }
+}

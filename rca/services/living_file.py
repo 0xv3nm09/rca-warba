@@ -390,7 +390,7 @@ async def rebuild_group(db, gw: ModelGateway, group_id: str, today: date) -> dic
         ):
             if not claims:
                 continue
-            joined = "; ".join(c.claim for c, *_ in claims)
+            joined = "; ".join(dict.fromkeys(c.claim for c, *_ in claims))
             best = max(claims, key=lambda t: t[3])
             c, ev, lab, cal, material, reasons = best
             facts.append(

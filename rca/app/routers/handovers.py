@@ -12,6 +12,8 @@ from rca.app.schemas import (
     HandoverDetail,
     ItemOut,
 )
+from rca.audit import writer as audit
+from rca.db.models import CommitmentRow, FactRow
 from rca.services import handover as svc
 
 router = APIRouter(prefix="/handovers", tags=["handovers"])
@@ -191,3 +193,111 @@ async def close(
 ):
     result = await svc.try_close(db, handover_id, actor=s.user_id)
     return CloseResponse(request_id=request.state.request_id, **result)
+
+
+@router.get("/{handover_id}/package")
+async def handover_package(
+    handover_id: str, request: Request, s=Depends(current_session), db: AsyncSession = Depends(get_db)
+):
+    """The Track 2 deliverable as a single artifact: the full client context,
+    structured into one transferable dossier (brief, commitments, people,
+    open items, sources). Every line keeps its source link."""
+    from sqlalchemy import select
+
+    from rca.app.errors import NotFound
+    from rca.db.models import Entity, HandoverRow
+
+    h = await db.get(HandoverRow, handover_id)
+    if h is None:
+        raise NotFound("Handover not found")
+
+    facts = list((await db.execute(select(FactRow).where(FactRow.group_id == h.group_id))).scalars())
+    commitments = list(
+        (await db.execute(select(CommitmentRow).where(CommitmentRow.group_id == h.group_id))).scalars()
+    )
+    entities = list((await db.execute(select(Entity).where(Entity.group_id == h.group_id))).scalars())
+    readiness = await svc.readiness(db, handover_id)
+    items = await svc.items(db, handover_id)
+
+    # Sources appendix: deduped by record (record_id + version), with freshness.
+    sources, seen = [], set()
+    for f in facts:
+        for e in f.evidence or []:
+            key = (e["record_id"], e.get("record_version", 1))
+            if key in seen:
+                continue
+            seen.add(key)
+            sources.append(e)
+
+    await audit.append(
+        db, actor=s.user_id, action="package_viewed", subject=handover_id,
+        payload={"group": h.group_id, "facts": len(facts)},
+    )
+    await db.commit()
+
+    return {
+        "request_id": request.state.request_id,
+        "handover": {
+            "handover_id": h.id, "group_id": h.group_id, "from_rm": h.from_rm,
+            "to_rm": h.to_rm, "effective_date": str(h.effective_date),
+            "kind": h.kind, "status": h.status,
+        },
+        "readiness": {
+            "ready": readiness.ready,
+            "blocking": readiness.blocking,
+            "statement": (
+                "Readiness checks pass: every critical item is owned and dated."
+                if readiness.ready
+                else "Cannot close yet — the blocking reasons below are enforced by code, not judgement."
+            ),
+        },
+        "brief": [
+            {
+                "kind": f.kind, "text": f.text, "label": f.label,
+                "confidence": f.confidence, "amount_kwd": str(f.amount_kwd) if f.amount_kwd else None,
+                "due_date": str(f.due_date) if f.due_date else None,
+                "reasons": list(f.reasons or []),
+                "sources": list(dict.fromkeys(e["record_id"] for e in (f.evidence or []))),
+            }
+            for f in facts
+            if f.material or f.label == "conflict"
+        ],
+        "commitments": [
+            {
+                "description": c.description, "state": c.state, "owner": c.owner,
+                "due_date": str(c.due_date) if c.due_date else None,
+                "promised_by": c.promised_by,
+                "sources": [e["record_id"] for e in (c.evidence or [])],
+            }
+            for c in commitments
+        ],
+        "people": {
+            "entities": [
+                {"name": e.legal_name_en, "role": e.role, "cr": e.cr_number} for e in entities
+            ],
+            "contacts": [
+                {"text": f.text, "label": f.label}
+                for f in facts if f.kind == "contact"
+            ],
+        },
+        "open_items": [
+            {
+                "kind": i.kind, "status": i.status, "owner": i.owner,
+                "question": i.question_text, "failure_point": i.failure_point,
+            }
+            for i in items
+        ],
+        "sources": sorted(
+            sources,
+            key=lambda e: (e["source_system"], e["record_id"]),
+        ),
+        "provenance": {
+            "assembled_from": sorted({e["source_system"] for e in sources}),
+            "fact_count": len(facts),
+            "source_count": len(sources),
+            "note": (
+                "All client data in this prototype is synthetic. Every line links to a source "
+                "record; recollection items are marked, never presented as fact."
+            ),
+        },
+    }

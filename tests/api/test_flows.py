@@ -237,3 +237,19 @@ async def test_alert_status_resolves_when_fixed(client):
     assert alerts2["expiry_no_owner"]["status"] == "resolved"
     alerts_board = (await client.get("/alerts", headers=H(t_lead))).json()["alerts"]
     assert all("status" in a for a in alerts_board)
+
+
+async def test_handover_package_is_one_transferable_artifact(client):
+    """The official Track 2 wording: 'a single transferable package'. The
+    dossier assembles brief, commitments, people, open items and a deduped
+    sources appendix in one payload."""
+    hov, t_sara, _ = await seeded_ids(client)
+    r = await client.get(f"/handovers/{hov}/package", headers=H(t_sara))
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert d["handover"]["group_id"] == "GHC-001"
+    assert d["brief"] and d["sources"]
+    ids = [(e["record_id"], e["record_version"]) for e in d["sources"]]
+    assert len(ids) == len(set(ids)), "sources appendix must be deduped"
+    assert d["provenance"]["source_count"] == len(ids)
+    assert "assembled_from" in d["provenance"]
