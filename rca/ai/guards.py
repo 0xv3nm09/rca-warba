@@ -15,7 +15,10 @@ INJECTION_PATTERNS = [
 _inj = re.compile("|".join(INJECTION_PATTERNS), re.IGNORECASE)
 
 BANNED_CLAIMS = [
-    re.compile(r"\b(approved|confirmed rate|guaranteed)\b", re.I),
+    # "not approved" is a record quoting its own refusal — quoting it with a
+    # citation is safe; only an un-negated approval claim is banned.
+    re.compile(r"\b(?<!not )approved\b", re.I),
+    re.compile(r"\bconfirmed rate\b|\bguaranteed\b", re.I),
     re.compile(r"(تمت الموافقة|معتمد)"),
 ]
 

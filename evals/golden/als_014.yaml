@@ -5,7 +5,8 @@ lang_mix: [en]
 segment: mid_corporate
 
 expected_facts:
-  - must_contain: "promise[ -_]recorded"
+  - name: "Murabaha promise-recorded stage fact"
+    must_contain: "promise[ -_]recorded"
     kind: decision
     material: false
     reasons_must_contain: ["contract record"]

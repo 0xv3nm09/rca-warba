@@ -230,7 +230,10 @@ async def handover_package(
             sources.append(e)
 
     await audit.append(
-        db, actor=s.user_id, action="package_viewed", subject=handover_id,
+        db,
+        actor=s.user_id,
+        action="package_viewed",
+        subject=handover_id,
         payload={"group": h.group_id, "facts": len(facts)},
     )
     await db.commit()
@@ -238,9 +241,13 @@ async def handover_package(
     return {
         "request_id": request.state.request_id,
         "handover": {
-            "handover_id": h.id, "group_id": h.group_id, "from_rm": h.from_rm,
-            "to_rm": h.to_rm, "effective_date": str(h.effective_date),
-            "kind": h.kind, "status": h.status,
+            "handover_id": h.id,
+            "group_id": h.group_id,
+            "from_rm": h.from_rm,
+            "to_rm": h.to_rm,
+            "effective_date": str(h.effective_date),
+            "kind": h.kind,
+            "status": h.status,
         },
         "readiness": {
             "ready": readiness.ready,
@@ -253,8 +260,11 @@ async def handover_package(
         },
         "brief": [
             {
-                "kind": f.kind, "text": f.text, "label": f.label,
-                "confidence": f.confidence, "amount_kwd": str(f.amount_kwd) if f.amount_kwd else None,
+                "kind": f.kind,
+                "text": f.text,
+                "label": f.label,
+                "confidence": f.confidence,
+                "amount_kwd": str(f.amount_kwd) if f.amount_kwd else None,
                 "due_date": str(f.due_date) if f.due_date else None,
                 "reasons": list(f.reasons or []),
                 "sources": list(dict.fromkeys(e["record_id"] for e in (f.evidence or []))),
@@ -264,7 +274,9 @@ async def handover_package(
         ],
         "commitments": [
             {
-                "description": c.description, "state": c.state, "owner": c.owner,
+                "description": c.description,
+                "state": c.state,
+                "owner": c.owner,
                 "due_date": str(c.due_date) if c.due_date else None,
                 "promised_by": c.promised_by,
                 "sources": [e["record_id"] for e in (c.evidence or [])],
@@ -272,18 +284,16 @@ async def handover_package(
             for c in commitments
         ],
         "people": {
-            "entities": [
-                {"name": e.legal_name_en, "role": e.role, "cr": e.cr_number} for e in entities
-            ],
-            "contacts": [
-                {"text": f.text, "label": f.label}
-                for f in facts if f.kind == "contact"
-            ],
+            "entities": [{"name": e.legal_name_en, "role": e.role, "cr": e.cr_number} for e in entities],
+            "contacts": [{"text": f.text, "label": f.label} for f in facts if f.kind == "contact"],
         },
         "open_items": [
             {
-                "kind": i.kind, "status": i.status, "owner": i.owner,
-                "question": i.question_text, "failure_point": i.failure_point,
+                "kind": i.kind,
+                "status": i.status,
+                "owner": i.owner,
+                "question": i.question_text,
+                "failure_point": i.failure_point,
             }
             for i in items
         ],

@@ -11,6 +11,7 @@ import {
   type ClientFile,
   type Evidence,
   type HandoverDetail,
+  type TriageResult,
 } from "./api";
 import {
   Citation,
@@ -506,7 +507,83 @@ function Board({
           </aside>
         )}
       </div>
+
+      <TriagePanel />
     </section>
+  );
+}
+
+function TriagePanel() {
+  const [text, setText] = useState("");
+  const [res, setRes] = useState<TriageResult | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  const run = async () => {
+    setBusy(true);
+    setErr("");
+    try {
+      setRes(await api.triage(text.trim()));
+    } catch (e: any) {
+      setErr(e?.error?.message || "triage failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const chip = res
+    ? res.label === "escalate"
+      ? "escalate"
+      : res.label === "needs_review"
+        ? "review"
+        : "verified"
+    : "";
+
+  return (
+    <div className="card triage-panel">
+      <div className="status-line">
+        <h3 style={{ margin: 0 }}>Intake triage</h3>
+        <span className="chip absent">use case 8</span>
+      </div>
+      <p className="meta">
+        A client email or letter lands in a shared inbox. Paste it here: the router classifies the
+        issue, matches it against the commitment register, and routes it — reply, remind the owner,
+        or escalate to the team lead — with the reasons shown. Nothing is sent; the routing decision
+        is computed from the records, not guessed by a model.
+      </p>
+      <div className="triage-row">
+        <textarea
+          rows={3}
+          placeholder="e.g. Client says they are still waiting for the term sheet we promised last week."
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+        />
+        <button disabled={busy || text.trim().length < 3} onClick={run}>
+          {busy ? "Triaging…" : "Triage"}
+        </button>
+      </div>
+      {err && <p className="meta" style={{ color: "var(--bad-700)" }}>{err}</p>}
+      {res && (
+        <div className="alert-item" style={{ marginTop: 10 }}>
+          <div className="row">
+            <span className={`chip ${chip}`}>{res.issue_class.replace(/_/g, " ")}</span>
+            <span className="meta">
+              action: {res.action}
+              {res.route_to ? ` → ${res.route_to.replace(/_/g, " ")}` : ""} ·{" "}
+              {Math.round(res.confidence * 100)}%
+            </span>
+          </div>
+          <ul className="blockers">
+            {res.reasons.map((r, i) => (
+              <li key={i}>{r}</li>
+            ))}
+          </ul>
+          {res.matched_commitment && (
+            <span className="meta">Matched commitment: {res.matched_commitment}</span>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -1830,7 +1907,8 @@ function EvalsView() {
     <section>
       <h2>Release gates — synthetic golden set</h2>
       <p className="meta">
-        Generated {data.generated_at?.slice(0, 19).replace("T", " ") || "—"} · routes:{" "}
+        Generated {data.generated_at?.slice(0, 19).replace("T", " ") || "—"} ·{" "}
+        {data.mode ? `${data.mode} · ` : ""}routes:{" "}
         {Object.entries(data.routes || {})
           .map(([k, v]) => `${k}=${v}`)
           .join(", ")}
@@ -1851,6 +1929,23 @@ function EvalsView() {
         <div className="stat">
           <span className="n">{Math.round(data.gates.numeric_exactness * 100)}%</span>
           <span className="l">numeric exactness</span>
+        </div>
+        <div className="stat">
+          <span className={`n ${data.gates.critical_recall_ok === false ? "warn" : ""}`}>
+            {data.gates.critical_recall != null ? `${Math.round(data.gates.critical_recall * 100)}%` : "—"}
+          </span>
+          <span className="l">critical recall ({data.gates.critical_planted ?? "—"} planted)</span>
+        </div>
+        <div className="stat">
+          <span className={`n ${data.gates.ar_en_gap_ok === false ? "warn" : ""}`}>
+            {data.gates.ar_en_gap_pts != null ? `${data.gates.ar_en_gap_pts} pts` : "—"}
+          </span>
+          <span className="l">
+            Arabic–English gap
+            {data.gates.en_rate != null && data.gates.ar_rate != null
+              ? ` (en ${Math.round(data.gates.en_rate * 100)}% · ar ${Math.round(data.gates.ar_rate * 100)}%)`
+              : ""}
+          </span>
         </div>
       </div>
       <p className="meta" style={{ margin: "6px 0 16px" }}>

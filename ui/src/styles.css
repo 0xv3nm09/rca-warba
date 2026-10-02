@@ -705,3 +705,14 @@ body.demo-mode main { padding-inline-end: 300px; }
   .pkg { position: absolute; inset: 0; width: 100%; max-height: none; box-shadow: none; border-radius: 0; }
   .no-print { display: none !important; }
 }
+
+/* ---------- Intake triage (use case 8) ---------- */
+.triage-panel { margin-top: 18px; }
+.triage-row { display: flex; gap: 10px; align-items: stretch; margin: 10px 0 4px; }
+.triage-row textarea {
+  flex: 1; padding: 11px 14px; border: 1px solid var(--line-2);
+  border-radius: 10px; font-size: 14px; font-family: var(--font);
+  background: var(--card); color: var(--ink); resize: vertical; min-height: 64px;
+}
+.triage-row textarea:focus { outline: 2px solid var(--gold-500); outline-offset: 1px; border-color: var(--gold-500); }
+.triage-row button { align-self: flex-start; white-space: nowrap; }

@@ -100,6 +100,17 @@ export interface AskResult {
   reasons: string[];
 }
 
+export interface TriageResult {
+  request_id: string;
+  issue_class: string;
+  action: string;
+  route_to: string | null;
+  label: string;
+  confidence: number;
+  reasons: string[];
+  matched_commitment: string | null;
+}
+
 let token: string | null = localStorage.getItem("rca_token");
 export let currentUser: string = localStorage.getItem("rca_user") || "";
 export let currentGroup: string | null = localStorage.getItem("rca_group");
@@ -257,12 +268,26 @@ export const api = {
     call<{
       generated_at?: string;
       routes?: Record<string, string>;
-      gates: { checks_passed: number; checks_total: number; numeric_exactness: number; all_gates_green: boolean };
+      mode?: string;
+      gates: {
+        checks_passed: number;
+        checks_total: number;
+        numeric_exactness: number;
+        all_gates_green: boolean;
+        critical_recall?: number | null;
+        critical_recall_ok?: boolean | null;
+        critical_planted?: number | null;
+        en_rate?: number | null;
+        ar_rate?: number | null;
+        ar_en_gap_pts?: number | null;
+        ar_en_gap_ok?: boolean | null;
+      };
       cases: {
         case_id: string;
         passed: boolean;
         checks: { name: string; ok: boolean; detail?: string }[];
       }[];
     }>("GET", "/admin/evals"),
+  triage: (text: string) => call<TriageResult>("POST", "/triage", { text, lang: "en" }),
   auditVerify: () => call<{ chain_valid: boolean }>("GET", "/admin/audit/verify"),
 };

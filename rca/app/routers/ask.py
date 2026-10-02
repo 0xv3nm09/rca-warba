@@ -19,7 +19,9 @@ async def ask(
     db: AsyncSession = Depends(get_db),
     gw: ModelGateway = Depends(get_gateway),
 ):
-    result = await ask_svc.answer(db, gw, group_id=group_id, question=body.question, user_id=s.user_id)
+    result = await ask_svc.answer(
+        db, gw, group_id=group_id, question=body.question, user_id=s.user_id, lang=body.lang
+    )
     await audit.append(
         db,
         actor=s.user_id,
