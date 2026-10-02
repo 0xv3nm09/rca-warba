@@ -16,6 +16,6 @@ Companion to proposal §05 (the use cases) and §15 (what will be working by 9 O
 
 **Model note (§11).** Extraction is model-optional: a deterministic rules pass runs alongside the model, and every claim — model or rules — must pass the same verification (verbatim source span, number match against structured fields, entailment). A model outage degrades coverage, never correctness; the console runs with or without an external model endpoint.
 
-**Test note (§10, §12).** The failure modes in §10 are automated tests in the repository: `test_unrecorded_approval_is_never_claimed`, `test_injection_email_has_no_effect`, `test_cross_group_leak_zero`, `test_close_blocked_without_owner` — 49 tests in total, plus the golden-set evaluation whose release gates are shown on the console's Evals screen.
+**Test note (§10, §12).** The failure modes in §10 are automated tests in the repository: `test_unrecorded_approval_is_never_claimed`, `test_injection_email_has_no_effect`, `test_cross_group_leak_zero`, `test_close_blocked_without_owner` — 51 tests in total, plus the golden-set evaluation whose release gates are shown on the console's Evals screen (critical-item recall and Arabic–English parity are measured, not just claimed — see `docs/ARCHITECTURE.md` §8).
 
 *Reviewers can reproduce everything above from the repository: `docker compose up -d --build`, open the console, sign in as any of the three roles.*

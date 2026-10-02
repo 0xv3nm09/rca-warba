@@ -47,11 +47,23 @@ Useful commands:
 
 | Command | What it does |
 | --- | --- |
-| `make test` | full test suite (41 tests: domain, API flows, security) |
-| `make eval` | golden-set evaluation; all release gates green |
+| `make test` | full test suite (51 tests: domain, API flows, security) |
+| `make eval` | golden-set evaluation; all release gates green (hermetic — no API key needed) |
 | `make restart` | emergency fast dev: rebuild + force-recreate all containers |
 | `make down` | stop everything |
 | `curl localhost:8000/admin/audit/verify -H "Authorization: Bearer <lead token>"` | verify the hash-chained audit log |
+
+## Documentation
+
+| Doc | Contents |
+| --- | --- |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | end-to-end flows (ingestion, ask, handover), the layer-by-layer guardrail stack with code, model gateway, confidence & labels, eval gates, invariants, prototype boundaries |
+| [docs/USE_CASES.md](docs/USE_CASES.md) | each use case → demo path, code path, core snippet, automated proof; demo-video beat map |
+| [docs/prototype-notes.md](docs/prototype-notes.md) | per-use-case coverage table (what is working vs deferred to pilot) |
+
+The console also has a **guided demo path**: open `http://localhost:8000/?demo=1`
+and follow the 8 beats on the right-hand rail — the same beats a judge sees in
+five minutes.
 
 ## Demo logins (local profile, synthetic data)
 
@@ -122,7 +134,7 @@ output is schema-validated and quote-checked exactly like the dummy route.
 | Handover workflow, gap questions, acceptance, blocking close | — |
 | Agent triggers: leave-cover brief, nightly expiry/overdue scans | — |
 | Hash-chained audit log + verifier | — |
-| 41 automated tests; golden-set eval with release gates | — |
+| 51 automated tests; golden-set eval with release gates (incl. Arabic-English parity) | — |
 | Arabic normalisation, ACL-before-retrieval, injection guards | — |
 
 ## Repository map
@@ -149,10 +161,12 @@ evals/golden/     # per-group golden cases
 | Metric | Gate |
 | --- | --- |
 | Numeric exactness | 100% |
+| Critical-item recall | 100% (7/7 planted items; gate ≥ 95%) |
+| Arabic–English parity | 0 pts gap across mirrored AR/EN question pairs (gate < 3 pts) |
 | Unsupported material claims | 0 |
 | Cross-group leakage | 0 |
-| Injection success | 0 (email flagged+ignored; question refused 422) |
+| Injection success | 0 (email flagged+ignored; question refused 422 — English and Arabic) |
 | Recollection promoted to verified | never (state enforced) |
-| Eval snapshot | `reports/golden_snapshot.json` |
+| Eval snapshot | `reports/golden_snapshot.json` (hermetic: reproducible with `make eval`, no API key) |
 
 Present these as synthetic-data results, never as Warba results.
