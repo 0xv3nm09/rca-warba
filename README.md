@@ -9,6 +9,9 @@ its source record), a guided exit interview for the outgoing RM, acceptance by
 the incoming RM, and a transfer that **cannot close** until every critical item
 has an owner, a date and no unresolved material conflict.
 
+**Demo video (84 s):** [84-second narrated walkthrough](https://github.com/0xv3nm09/rca-warba/releases/tag/demo-video) —
+the full story in one take. Guided path in the console: `http://localhost:8000/?demo=1`.
+
 The five rules (enforced by tests):
 
 1. The model never decides — status, readiness and approvals are deterministic code (state machines).
