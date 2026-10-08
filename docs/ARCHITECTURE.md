@@ -53,18 +53,18 @@ verbatim, numbers must match structured fields. A model outage therefore
 
 ```mermaid
 flowchart TB
-    A[source record] --> B[sanitise: strip HTML comments -> flagged-content]
-    B --> C[rules extractor runs FIRST]
-    B --> D[model extraction (gateway)]
-    C --> E[union claims - rules can never be dropped]
+    A["source record"] --> B["sanitise: strip HTML comments to flagged-content"]
+    B --> C["rules extractor runs FIRST"]
+    B --> D["model extraction (gateway)"]
+    C --> E["union claims — rules can never be dropped"]
     D --> E
-    E --> F[per-record, per-kind disposition]
-    F --> G1[dated promise -> commitment register]
-    F --> G2[signatory mention -> mandate check]
-    F --> G3[amounts -> conflict pass across sources]
-    E --> H[verify: span verbatim? numbers match? entailment?]
-    H --> I[confidence + calibrator -> label]
-    I --> J[(facts / commitments / audit)]
+    E --> F["per-record, per-kind disposition"]
+    F --> G1["dated promise → commitment register"]
+    F --> G2["signatory mention → mandate check"]
+    F --> G3["amounts → conflict pass across sources"]
+    E --> H["verify: span verbatim? numbers match? entailment?"]
+    H --> I["confidence + calibrator → label"]
+    I --> J[("facts / commitments / audit")]
 ```
 
 The safety net — the deterministic extractor runs first and its claims are
