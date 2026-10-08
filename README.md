@@ -20,6 +20,42 @@ The five rules (enforced by tests):
 4. Confidence is computed from checks, not asked of the model.
 5. One change cannot break everything — adapters and model routes are swappable via configuration.
 
+## How it works
+
+```mermaid
+flowchart LR
+    subgraph Sources["Source systems (dummy adapters)"]
+        CRM["CRM"] --- CORE["Core banking"] --- ECM["ECM archive"] --- MAIL["Email"] --- HR["HR calendar"]
+    end
+    subgraph Ingest["Ingestion pipeline"]
+        G["sanitise + input guard"] --> R["deterministic rules extractor"]
+        G --> M["model extraction via gateway"]
+        R --> U["union + per-kind disposition"]
+        M --> U
+        U --> V["verify - verbatim span / number match / entailment"]
+        V --> CF["confidence + calibrator to label"]
+    end
+    subgraph Serve["Serving"]
+        LF["living file"] --> ASK["cited ask"]
+        LF --> HO["handover workflow + close gate"]
+        LF --> TR["agents: triggers, alerts, triage"]
+        AUD[("hash-chained audit")]
+    end
+    Sources --> G
+    CF --> LF
+    ASK --> AUD
+    HO --> AUD
+```
+
+Three properties carry the whole design: a **deterministic rules extractor runs
+first** and its claims are unioned with the model's (a model outage degrades
+coverage, never correctness); **approval and Shariah-stage answers come from
+state machines**, never from a model's reading of a note; and retrieval is
+**ACL-before-ranking**, so cross-group leakage is impossible by construction.
+The full depth — every flow diagram, the **10-layer guardrail stack with real
+code**, the measured eval gates and the invariants list — is in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
 ---
 
 ## Quickstart (one command, no API keys needed)
@@ -58,11 +94,11 @@ Useful commands:
 
 ## Documentation
 
-| Doc | Contents |
+| Doc | What's inside |
 | --- | --- |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | end-to-end flows (ingestion, ask, handover), the layer-by-layer guardrail stack with code, model gateway, confidence & labels, eval gates, invariants, prototype boundaries |
-| [docs/USE_CASES.md](docs/USE_CASES.md) | each use case → demo path, code path, core snippet, automated proof; demo-video beat map |
-| [docs/prototype-notes.md](docs/prototype-notes.md) | per-use-case coverage table (what is working vs deferred to pilot) |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | the deep dive: mermaid flows for ingestion, the guarded ask and the handover close gate · the **10-layer guardrail stack** with the actual code for each layer · confidence pipeline · measured gates · invariants |
+| [docs/USE_CASES.md](docs/USE_CASES.md) | every use case mapped: demo path → code path → core snippet → the exact test that proves it · demo-video beat map with timestamps |
+| [docs/prototype-notes.md](docs/prototype-notes.md) | per-use-case coverage table — what is working today vs deliberately deferred to the pilot |
 
 The console also has a **guided demo path**: open `http://localhost:8000/?demo=1`
 and follow the 8 beats on the right-hand rail — the same beats a judge sees in
