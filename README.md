@@ -31,6 +31,12 @@ first** and its claims are unioned with the model's (a model outage degrades
 coverage, never correctness); **approval and Shariah-stage answers come from
 state machines**, never from a model's reading of a note; and retrieval is
 **ACL-before-ranking**, so cross-group leakage is impossible by construction.
+
+<p align="center">
+  <img src="docs/diagrams/ask-sequence.png" alt="Sequence diagram: a guarded question's journey — RM → console → input guard → deterministic intents → state machine → draft gateway → audit" width="800">
+</p>
+<p align="center"><sub><b>A guarded question's journey</b> — why "is the price approved?" can never be answered from a note's wording</sub></p>
+
 The full depth — every flow diagram, the **10-layer guardrail stack with real
 code**, the measured eval gates and the invariants list — is in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
