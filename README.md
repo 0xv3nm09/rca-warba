@@ -167,6 +167,39 @@ output is schema-validated and quote-checked exactly like the dummy route.
 | 51 automated tests; golden-set eval with release gates (incl. Arabic-English parity) | Run against the planted problems by design — they measure the pipeline, not real clients |
 | Arabic normalisation, ACL-before-retrieval, injection guards | The attack email and the Arabic notes it protects are planted fixtures |
 
+## What this prototype achieves
+
+Every claim below is measurable — reproduce any row with the commands shown.
+
+| Dimension | Achieved | Verify |
+| --- | --- | --- |
+| Correctness | numeric exactness **100%** · unsupported material claims **0** | `make eval` → Evals screen |
+| Recall | critical-item recall **100%** (7/7 planted facts & commitments) | `reports/golden_snapshot.json` |
+| Arabic–English parity | **0.0 pts** gap across mirrored AR/EN question pairs | golden case `ghc-001` |
+| Security | cross-group leakage **0** · injection success **0** (English and Arabic probes) | annex "try to break it" |
+| Engineering | **51 automated tests** green · hermetic eval — no API key, same numbers anywhere | `make test` && `make eval` |
+| Track 2 deliverable | the **single transferable package** (`/handovers/{id}/package`) with readiness statement | console → Transfer → Handover package |
+| Reproducibility | one command, zero keys, zero downloads | `docker compose up -d --build` |
+
+## Future work
+
+The honest next steps, in the order the proposal commits to them (§13–14):
+
+1. **8-week proof of concept in Warba's sandbox** with 8–12 RMs, measured
+   against today's baseline: discover (weeks 1–2) → prove on anonymised past
+   handovers (3–4) → supervised use beside today's process (5–6) → joint
+   go/no-go with measured economics (7–8).
+2. **Integration order**: CRM and ECM read-only first → credit and trade
+   systems → the THEKEY hook. No writes to bank systems during the pilot.
+3. **Production hardening** (months 3–8): delivery inside Microsoft Teams with
+   Entra ID single sign-on + MFA, row-level security and migrations, a fitted
+   confidence calibrator (replacing the hand-set one), product telemetry, and
+   merger batch mode across portfolios.
+4. **Voice capture — phase 2, RM-facing only**: the exit interview and
+   post-meeting debriefs once text accuracy is proven in the pilot. No
+   client-facing voice agent by design — live conversation support is another
+   track's territory.
+
 ## Repository map
 
 ```
