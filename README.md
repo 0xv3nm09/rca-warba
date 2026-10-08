@@ -24,8 +24,8 @@ The five rules (enforced by tests):
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/how-it-works-dark.png">
-    <img src="docs/diagrams/how-it-works.png" alt="How it works: source systems through sanitised ingestion, rules-first plus model extraction, verification and computed labels, into the living file — serving the cited ask, the handover close gate and the agents — over a hash-chained audit" width="800">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/how-it-works-dark.svg">
+    <img src="docs/diagrams/how-it-works.svg" alt="How it works: source systems through sanitised ingestion, rules-first plus model extraction, verification and computed labels, into the living file — serving the cited ask, the handover close gate and the agents — over a hash-chained audit" width="800">
   </picture>
 </p>
 
@@ -37,8 +37,8 @@ state machines**, never from a model's reading of a note; and retrieval is
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/ask-sequence-dark.png">
-    <img src="docs/diagrams/ask-sequence.png" alt="Sequence diagram: a guarded question's journey — RM → console → input guard → deterministic intents → state machine → draft gateway → audit" width="800">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/ask-sequence-dark.svg">
+    <img src="docs/diagrams/ask-sequence.svg" alt="Sequence diagram: a guarded question's journey — RM → console → input guard → deterministic intents → state machine → draft gateway → audit" width="800">
   </picture>
 </p>
 <p align="center"><sub><b>A guarded question's journey</b> — why "is the price approved?" can never be answered from a note's wording</sub></p>
