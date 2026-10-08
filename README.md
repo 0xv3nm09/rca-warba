@@ -23,26 +23,31 @@ The five rules (enforced by tests):
 ## How it works
 
 ```mermaid
-flowchart LR
-    subgraph Sources["Source systems (dummy adapters)"]
-        CRM["CRM"] --- CORE["Core banking"] --- ECM["ECM archive"] --- MAIL["Email"] --- HR["HR calendar"]
-    end
-    subgraph Ingest["Ingestion pipeline"]
-        G["sanitise + input guard"] --> R["deterministic rules extractor"]
-        G --> M["model extraction via gateway"]
-        R --> U["union + per-kind disposition"]
-        M --> U
-        U --> V["verify - verbatim span / number match / entailment"]
-        V --> CF["confidence + calibrator to label"]
-    end
-    subgraph Serve["Serving"]
-        LF["living file"] --> ASK["cited ask"]
-        LF --> HO["handover workflow + close gate"]
-        LF --> TR["agents: triggers, alerts, triage"]
-        AUD[("hash-chained audit")]
-    end
-    Sources --> G
+flowchart TB
+    SRC["SOURCE SYSTEMS · CRM · core banking · ECM archive · email · HR calendar — dummy adapters, synthetic data"]
+    G["1 · INGEST — sanitise strips hidden HTML-comment channels · input guard refuses override questions (EN + AR)"]
+    R["2a · RULES RUN FIRST — deterministic extractor; its claims can never be dropped"]
+    M["2b · MODEL ADDS BREADTH — via the gateway: any OpenAI-compatible endpoint, or the built-in dummy routes"]
+    U["3 · UNION + DISPOSITION — model proposes kinds, code decides: dated promise → commitment register · signatory → mandate check"]
+    V["4 · VERIFY — quote found verbatim in the source? numbers match the structured fields? entailment holds?"]
+    CF["5 · LABEL — confidence computed from checks: verified · needs review · conflict · not in records · escalate"]
+    LF["LIVING FILE — every fact carries its citation; Arabic renders RTL"]
+    ASK["CITED ASK — approval answers come from commitment states, never a note's wording"]
+    HO["HANDOVER — interview saved as recollection · incoming RM accepts · close stays blocked until every critical item is owned"]
+    TR["AGENTS — cover briefs with do-not-say guards · nightly expiry and overdue scans · triage — every trigger ends in a human gate"]
+    AUD[("HASH-CHAINED AUDIT · every read, draft and decision — tamper-evident")]
+
+    SRC --> G
+    G --> R
+    G --> M
+    R --> U
+    M --> U
+    U --> V
+    V --> CF
     CF --> LF
+    LF --> ASK
+    LF --> HO
+    LF --> TR
     ASK --> AUD
     HO --> AUD
 ```
@@ -170,11 +175,11 @@ output is schema-validated and quote-checked exactly like the dummy route.
 | FastAPI service, schemas, error envelope | Client records (3 groups, planted problems) |
 | State machines (commitments, Murabaha), readiness rules | Source systems behind dummy adapters (CRM, core, ECM, mail, HR) |
 | Extraction → verification (span, number, entailment) → labels | Teams app / Entra ID (web console + dev login instead) |
-| Handover workflow, gap questions, acceptance, blocking close | — |
-| Agent triggers: leave-cover brief, nightly expiry/overdue scans | — |
-| Hash-chained audit log + verifier | — |
-| 51 automated tests; golden-set eval with release gates (incl. Arabic-English parity) | — |
-| Arabic normalisation, ACL-before-retrieval, injection guards | — |
+| Handover workflow, gap questions, acceptance, blocking close | The demo transfer itself (GHC-001, Omar → Sara) is seeded fixture data |
+| Agent triggers: leave-cover brief, nightly expiry/overdue scans | The leave calendar and the records they scan are synthetic |
+| Hash-chained audit log + verifier | Covers the demo run only — resets on reseed |
+| 51 automated tests; golden-set eval with release gates (incl. Arabic-English parity) | Run against the planted problems by design — they measure the pipeline, not real clients |
+| Arabic normalisation, ACL-before-retrieval, injection guards | The attack email and the Arabic notes it protects are planted fixtures |
 
 ## Repository map
 
