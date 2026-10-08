@@ -47,6 +47,15 @@ The full depth — every flow diagram, the **10-layer guardrail stack with real
 code**, the measured eval gates and the invariants list — is in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
+## The console
+
+| | |
+| :---: | :---: |
+| <img src="docs/screenshots/ui-board.png" width="410" alt="Readiness board"> | <img src="docs/screenshots/ui-client-file.png" width="410" alt="Client file with the two-system conflict"> |
+| **Readiness board** — blocked transfers with reasons, agent alerts, intake triage | **Client file** — every fact cited and labelled; the G-2291 conflict shown, never hidden |
+| <img src="docs/screenshots/ui-guarded-ask.png" width="410" alt="Guarded ask: is the price approved?"> | <img src="docs/screenshots/ui-package.png" width="410" alt="Handover package dossier"> |
+| **"Can I tell the client the price is approved?"** — answered from commitment states: *not in records*, cited | **The single transferable package** — the Track 2 deliverable as one reviewed dossier |
+
 ---
 
 ## Quickstart (one command, no API keys needed)
