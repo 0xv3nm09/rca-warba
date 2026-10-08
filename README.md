@@ -241,4 +241,5 @@ evals/golden/     # per-group golden cases
 | Recollection promoted to verified | never (state enforced) |
 | Eval snapshot | `reports/golden_snapshot.json` (hermetic: reproducible with `make eval`, no API key) |
 
-Present these as synthetic-data results, never as Warba results.
+All numbers are measured on the synthetic golden set; the pilot (see
+[Future work](#future-work)) measures them against a real baseline.
