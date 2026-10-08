@@ -22,35 +22,9 @@ The five rules (enforced by tests):
 
 ## How it works
 
-```mermaid
-flowchart TB
-    SRC["SOURCE SYSTEMS · CRM · core banking · ECM archive · email · HR calendar — dummy adapters, synthetic data"]
-    G["1 · INGEST — sanitise strips hidden HTML-comment channels · input guard refuses override questions (EN + AR)"]
-    R["2a · RULES RUN FIRST — deterministic extractor; its claims can never be dropped"]
-    M["2b · MODEL ADDS BREADTH — via the gateway: any OpenAI-compatible endpoint, or the built-in dummy routes"]
-    U["3 · UNION + DISPOSITION — model proposes kinds, code decides: dated promise → commitment register · signatory → mandate check"]
-    V["4 · VERIFY — quote found verbatim in the source? numbers match the structured fields? entailment holds?"]
-    CF["5 · LABEL — confidence computed from checks: verified · needs review · conflict · not in records · escalate"]
-    LF["LIVING FILE — every fact carries its citation; Arabic renders RTL"]
-    ASK["CITED ASK — approval answers come from commitment states, never a note's wording"]
-    HO["HANDOVER — interview saved as recollection · incoming RM accepts · close stays blocked until every critical item is owned"]
-    TR["AGENTS — cover briefs with do-not-say guards · nightly expiry and overdue scans · triage — every trigger ends in a human gate"]
-    AUD[("HASH-CHAINED AUDIT · every read, draft and decision — tamper-evident")]
-
-    SRC --> G
-    G --> R
-    G --> M
-    R --> U
-    M --> U
-    U --> V
-    V --> CF
-    CF --> LF
-    LF --> ASK
-    LF --> HO
-    LF --> TR
-    ASK --> AUD
-    HO --> AUD
-```
+<p align="center">
+  <img src="docs/diagrams/how-it-works.png" alt="How it works: source systems through sanitised ingestion, rules-first plus model extraction, verification and computed labels, into the living file — serving the cited ask, the handover close gate and the agents — over a hash-chained audit" width="800">
+</p>
 
 Three properties carry the whole design: a **deterministic rules extractor runs
 first** and its claims are unioned with the model's (a model outage degrades
