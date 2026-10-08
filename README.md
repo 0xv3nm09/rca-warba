@@ -1,7 +1,7 @@
 # Relationship Continuity Assistant (RCA)
 
 **Ignyte by DIFC × Warba Bank · Corporate Banking AI Challenge · Track 2 — Intelligent Relationship Handover**
-Magnus Mage · prototype · **all client data is synthetic**
+Prototype · **all client data is synthetic**
 
 A service that keeps every corporate client handover-ready: a sourced, living
 relationship file (facts, commitments, people, conflicts — every item linked to
@@ -154,7 +154,7 @@ output is schema-validated and quote-checked exactly like the dummy route.
    docker build -f docker/Dockerfile -t <registry>/rca-warba:latest .
    docker push <registry>/rca-warba:latest
    # reviewer side:
-   curl -O https://raw.githubusercontent.com/magnusmage/rca-warba/main/docker-compose.yml
+   curl -O https://raw.githubusercontent.com/0xv3nm09/rca-warba/main/docker-compose.yml
    docker compose up -d && open http://localhost:8000
    ```
    Works on Docker Desktop, colima, or any Linux Docker host. No keys needed.
